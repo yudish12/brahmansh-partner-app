@@ -1,0 +1,9 @@
+-dontwarn com.google.devtools.build.android.desugar.runtime.**
+-keep class io.agora.**{*;}
+-keep class com.hiennv.flutter_callkit_incoming.** { *; }
+-dontwarn java.beans.ConstructorProperties
+-dontwarn java.beans.Transient
+-dontwarn org.w3c.dom.bootstrap.DOMImplementationRegistry
+-dontwarn com.google.android.gms.safetynet.SafetyNet
+-dontwarn com.google.android.gms.safetynet.SafetyNetApi$AttestationResponse
+-dontwarn com.google.android.gms.safetynet.SafetyNetClient

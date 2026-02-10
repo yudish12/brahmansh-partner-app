@@ -1,0 +1,102 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+    id "com.google.gms.google-services"
+}
+
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader ->
+        localProperties.load(reader)
+    }
+}
+def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+if (flutterVersionCode == null) {
+    flutterVersionCode = '11'
+}
+
+def flutterVersionName = localProperties.getProperty('flutter.versionName')
+if (flutterVersionName == null) {
+    flutterVersionName = '1.0.3'
+}
+
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+   keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+android {
+    compileSdkVersion 36
+    ndkVersion "29.0.14033849"
+      packagingOptions {
+         pickFirst 'lib/**/libaosl.so'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+        coreLibraryDesugaringEnabled true
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    defaultConfig {
+        applicationId "com.brahmanshtalk.astrologer"
+        minSdkVersion 24
+        targetSdkVersion 36
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
+        multiDexEnabled true
+      
+       ndk {
+            abiFilters "armeabi-v7a","arm64-v8a"
+           //,"x86"
+         // abiFilters "armeabi-v7a","arm64-v8a"
+
+      }
+    }
+    signingConfigs {
+        release {
+            keyAlias keystoreProperties['keyAlias']
+            keyPassword keystoreProperties['keyPassword']
+            storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+            storePassword keystoreProperties['storePassword']
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled = true
+            shrinkResources = true
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), ' proguard-rules.pro'
+        }
+    }
+    namespace 'com.brahmanshtalk.astrologer'
+}
+
+flutter {
+    source '../..'
+}
+
+dependencies {
+     api 'io.agora.infra:aosl:1.2.13'
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+     implementation('com.google.firebase:firebase-auth') {
+         exclude module: "play-services-safetynet"
+     }
+    implementation ('com.android.support:multidex:2.0.1') {
+        exclude module: "play-services-safetynet"
+    }
+    
+
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'
+    implementation 'com.onesignal:OneSignal:[5.0.0, 5.99.99]'
+
+
+}
+apply plugin: 'com.google.gms.google-services'

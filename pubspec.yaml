@@ -1,0 +1,140 @@
+name: brahmanshtalk
+description: A new Flutter project.
+
+publish_to: "none"
+version: 1.0.0
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+dependencies:
+  agora_rtc_engine: ^6.5.3
+  agora_rtm: 2.2.5
+  audioplayers: ^6.0.0
+  confetti: ^0.8.0
+  cached_network_image: ^3.4.1
+  cloud_firestore: ^5.0.2
+  connectivity_plus: ^6.1.0
+  cupertino_icons: ^1.0.8
+  custom_clippers: ^2.0.0
+  date_format: ^2.0.7
+  device_info_plus: any
+  dotted_border: ^2.1.0
+  draggable_widget: ^2.0.0
+  carousel_slider: ^5.1.1
+  easy_localization: ^3.0.7
+  file_picker: ^10.3.1
+  firebase_app_check: ^0.3.0+2
+  firebase_auth: ^5.1.1
+  firebase_core: ^3.1.1
+  firebase_messaging: ^15.0.2
+  firebase_storage: ^12.1.0
+  flutter:
+    sdk: flutter
+  flutter_countdown_timer: ^4.1.0
+  flutter_document_picker: ^5.2.3
+  flutter_google_places_sdk: ^0.3.7
+  flutter_holo_date_picker: ^1.1.3
+  flutter_html: ^3.0.0
+  flutter_image_compress: ^2.4.0
+  flutter_inappwebview: ^6.1.5
+  flutter_keyboard_visibility: ^6.0.0
+  flutter_lints: ^6.0.0
+  flutter_local_notifications: ^19.5.0
+  flutter_rating_bar: ^4.0.1
+  flutter_svg: ^2.2.1
+  flutter_time_picker_spinner: ^2.0.0
+  font_awesome_flutter: ^10.11.0
+  geocoding: ^4.0.0
+  get: ^4.7.2
+  get_storage: ^2.1.1
+  google_fonts: ^6.3.2
+  google_sign_in: ^6.3.0
+  googleapis_auth: any
+  http: ^1.5.0
+  http_parser: any
+  image_cropper: any
+  image_picker: any
+  intl: any
+  intl_phone_number_input:
+    git:
+      url: https://github.com/Shahidbangash/intl_phone_number_input.git
+      ref: develop
+  flutter_callkit_incoming: ^2.5.5
+  lecle_yoyo_player: ^0.0.8
+  lottie: any
+  multi_image_picker_view: ^2.0.0
+  onesignal_flutter: ^5.3.0
+  package_info_plus: ^8.0.2
+  path_provider: ^2.1.3
+  pdf: ^3.11.0
+  record: ^6.2.0
+  percent_indicator: ^4.2.3
+  permission_handler: ^12.0.1
+  persistent_bottom_nav_bar: ^6.2.1
+  pinput: ^5.0.0
+  screenshot: ^3.0.0
+  share_plus: ^11.0.0
+  shared_preferences: ^2.2.3
+  simple_speed_dial: ^0.1.7
+  sizer: ^2.0.15
+  skeletonizer: ^2.0.1
+  smooth_page_indicator: ^1.2.0+3
+  story_view: ^0.16.5
+  swipe_to: ^1.0.6
+  syncfusion_flutter_gauges: any
+  syncfusion_flutter_pdfviewer: any
+  synchronized: ^3.3.1
+  toastification: ^3.0.2
+  translator: ^1.0.3+1
+  url_launcher: ^6.3.0
+  uuid: ^4.4.0
+  video_player: ^2.9.5
+  video_trimmer: ^5.0.0
+  webview_flutter: ^4.4.2
+  youtube_player_flutter: ^9.0.0
+  flutter_foreground_task: ^9.1.0
+  hmssdk_flutter: ^1.10.6
+  zego_uikit_prebuilt_call: ^4.18.3
+  zego_uikit_signaling_plugin: ^2.8.17
+  zego_uikit_prebuilt_live_streaming: ^3.14.6
+
+dev_dependencies:
+  build_runner: ^2.4.5
+  flutter_test:
+    sdk: flutter
+  mocktail: ^1.0.4
+dependency_overrides:
+  intl: ^0.19.0
+  path: ^1.9.1
+  web: ^1.1.0
+  sqflite: 2.3.3+1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/images/languages/
+    - assets/images/profilescreenicons/
+    - assets/images/drawericons/
+    - assets/translations/
+    - assets/animation/
+    - assets/images/planets/
+    - assets/images/profileicons/
+    - assets/images/bottombaricons/
+    - lib/utils/noti_service.json
+    - assets/ringtone.mp3
+    - assets/images/pdf.png
+    - assets/sounds/message_sound.mp3
+
+  fonts:
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/Poppins-Black.ttf
+        - asset: assets/fonts/Poppins-Bold.ttf
+        - asset: assets/fonts/Poppins-Medium.ttf
+        - asset: assets/fonts/Poppins-Regular.ttf
+        - asset: assets/fonts/Poppins-SemiBold.ttf
+        - asset: assets/fonts/Poppins-Thin.ttf
+        - asset: assets/fonts/Poppins-ExtraBold.ttf
+        - asset: assets/fonts/Poppins-ExtraLight.ttf
+        - asset: assets/fonts/Poppins-Light.ttf

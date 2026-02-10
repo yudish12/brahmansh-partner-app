@@ -1,0 +1,131 @@
+{
+  "project_info": {
+    "project_number": "414153424043",
+    "firebase_url": "https://brahmansh-a4c4e-default-rtdb.firebaseio.com",
+    "project_id": "brahmansh-a4c4e",
+    "storage_bucket": "brahmansh-a4c4e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:414153424043:android:e2f906709eaeb8aacbcbee",
+        "android_client_info": {
+          "package_name": "com.brahmanshtalk.astrologer"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "414153424043-7snkf62t0kp0olkv6sla413crdodfi5o.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.brahmanshtalk.astrologer",
+            "certificate_hash": "809782c41e098ce85774bd68d170ea119a4fee9c"
+          }
+        },
+        {
+          "client_id": "414153424043-8ft4e6e90bl2o8rdnjh1ms4gfn9cchum.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.brahmanshtalk.astrologer",
+            "certificate_hash": "da4f207689ad60bd8e0caa2b64195d5e81a16df1"
+          }
+        },
+        {
+          "client_id": "414153424043-dk2tq3aenc97fgc1m9ldhpm1j1g9l5mn.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.brahmanshtalk.astrologer",
+            "certificate_hash": "179799039a470cc6f5d8a861f7753950fb9e7aa6"
+          }
+        },
+        {
+          "client_id": "414153424043-ktjarflcmpu5trt4pae3vpqokehqrmd1.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.brahmanshtalk.astrologer",
+            "certificate_hash": "964b3a6e3043fd151cc86e515fe1fc8db06c566d"
+          }
+        },
+        {
+          "client_id": "414153424043-2ura82uc2g3ukvjqdu0vf1iupthfreb3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDOWYKiEVIDDVTRT7TGLSkE_Pc-3g5G3CY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "414153424043-2ura82uc2g3ukvjqdu0vf1iupthfreb3.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "414153424043-a213eg1va4uem6i3tvnc0ivef3q5duso.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.brahmanshtalk.user"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:414153424043:android:5db6238f70615b16cbcbee",
+        "android_client_info": {
+          "package_name": "com.brahmanshtalk.customerapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "414153424043-go9bdq94ufia8sntd2bfeafmuod3qdlf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.brahmanshtalk.customerapp",
+            "certificate_hash": "1b1a9c2f915ae1b8522e5c433fef659534540189"
+          }
+        },
+        {
+          "client_id": "414153424043-h4sodokolhiavcafs6oalsoeo5bbe9ib.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.brahmanshtalk.customerapp",
+            "certificate_hash": "d6275256e449632da0eec58bf39aa8d3ce575aea"
+          }
+        },
+        {
+          "client_id": "414153424043-2ura82uc2g3ukvjqdu0vf1iupthfreb3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDOWYKiEVIDDVTRT7TGLSkE_Pc-3g5G3CY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "414153424043-2ura82uc2g3ukvjqdu0vf1iupthfreb3.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "414153424043-a213eg1va4uem6i3tvnc0ivef3q5duso.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.brahmanshtalk.user"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

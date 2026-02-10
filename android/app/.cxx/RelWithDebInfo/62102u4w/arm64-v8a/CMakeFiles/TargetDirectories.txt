@@ -1,0 +1,2 @@
+/Users/sunilsingh/Desktop/diploy workspace/Astroway-pro-astrologer-app/android/app/.cxx/RelWithDebInfo/62102u4w/arm64-v8a/CMakeFiles/edit_cache.dir
+/Users/sunilsingh/Desktop/diploy workspace/Astroway-pro-astrologer-app/android/app/.cxx/RelWithDebInfo/62102u4w/arm64-v8a/CMakeFiles/rebuild_cache.dir
