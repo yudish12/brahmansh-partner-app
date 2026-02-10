@@ -207,8 +207,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!hasPermission) {
       global.showToast(
         message: 'Microphone permission is required to record voice messages',
-        textColor: Colors.white,
-        bgColor: Colors.red,
+        bgcolors: Colors.red,
       );
       return;
     }
@@ -219,8 +218,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!canRecord) {
         global.showToast(
           message: 'Microphone access denied',
-          textColor: Colors.white,
-          bgColor: Colors.red,
+          bgcolors: Colors.red,
         );
         return;
       }
@@ -248,8 +246,7 @@ class _ChatScreenState extends State<ChatScreen> {
       log('Start recording error: $e');
       global.showToast(
         message: 'Could not start recording',
-        textColor: Colors.white,
-        bgColor: Colors.red,
+        bgcolors: Colors.red,
       );
     }
   }
@@ -616,26 +613,6 @@ class _ChatScreenState extends State<ChatScreen> {
                                                 : widget.fireBasechatId!,
                                             widget.customerId)
                                         : null;
-
-                                    // Play sound when a new message is received
-                                    if (messageList.isNotEmpty &&
-                                        snapshot.hasData) {
-                                      debugPrint(
-                                          'first msage is ${messageList.first.message} ');
-
-                                      if (messageList.first.isEndMessage ==
-                                          true) {
-                                      } else {
-                                        // Ensure this only plays on new messages
-                                        WidgetsBinding.instance
-                                            .addPostFrameCallback((_) {
-                                          chatController.audioPlayer.play(
-                                            AssetSource(
-                                                'sounds/message_sound.mp3'),
-                                          );
-                                        });
-                                      }
-                                    }
 
                                     return ListView.builder(
                                         physics: const BouncingScrollPhysics(),

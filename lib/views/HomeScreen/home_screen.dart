@@ -30,6 +30,7 @@ import 'package:brahmanshtalk/views/HomeScreen/products/productScreen.dart';
 import 'package:brahmanshtalk/views/HomeScreen/profileBoost/MainHomeScreen.dart';
 import 'package:brahmanshtalk/views/HomeScreen/profileBoost/profileBoostScreen.dart';
 import 'package:brahmanshtalk/views/HomeScreen/tabs/languageScreen.dart';
+import 'package:brahmanshtalk/views/HomeScreen/voice_test_screen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -337,6 +338,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             if (homeController.isSelectedBottomIcon == 1) ...[
                               Row(
                                 children: [
+                                  InkWell(
+                                    onTap: () => Get.to(() => const VoiceTestScreen()),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                                      child: Icon(Icons.mic, color: COLORS().blackColor, size: 24),
+                                    ),
+                                  ),
                                   InkWell(
                                     onTap: () async {
                                       homeController.lan = [];

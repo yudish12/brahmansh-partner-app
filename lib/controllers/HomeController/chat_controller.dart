@@ -779,6 +779,10 @@ class ChatController extends GetxController {
 
       var messageResult = await refMessages.add(newMessage1.toJson());
       newMessage1.messageId = messageResult.id;
+      final pathCurrentUser = 'chats/$firebaseid/userschat/$globalId/messages/${newMessage1.messageId}';
+      final pathPartner = 'chats/$firebaseid/userschat/$partnerId/messages/${newMessage1.messageId}';
+      debugPrint('Message Firestore path (current user): $pathCurrentUser');
+      debugPrint('Message Firestore path (partner): $pathPartner');
       await userChatCollectionRef //ADD USER AND PARTNER IN THIS
           .doc(firebaseid)
           .collection('userschat')
@@ -957,9 +961,12 @@ class ChatController extends GetxController {
         debugPrint('sendVoiceMessageToFirebase: no chat id');
         return;
       }
-      final storageReference = FirebaseStorage.instance.ref().child(
-          '$firebaseId/voice_${DateTime.now().millisecondsSinceEpoch}.m4a');
-      final uploadTask = await storageReference.putFile(audioFile);
+      final storagePath = '$firebaseId/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      final storageReference = FirebaseStorage.instance.ref().child(storagePath);
+      debugPrint('Voice audio Storage path: $storagePath');
+      debugPrint('Voice audio full path: ${storageReference.fullPath}');
+      final metadata = SettableMetadata(contentType: 'audio/mp4');
+      final uploadTask = await storageReference.putFile(audioFile, metadata);
       if (uploadTask.state == TaskState.success) {
         debugPrint('Voice message uploaded');
       }
@@ -981,8 +988,7 @@ class ChatController extends GetxController {
       log('Upload voice exception: $e');
       global.showToast(
         message: 'Failed to send voice message',
-        textColor: Colors.white,
-        bgColor: Colors.red,
+        bgcolors: Colors.red,
       );
     }
   }
