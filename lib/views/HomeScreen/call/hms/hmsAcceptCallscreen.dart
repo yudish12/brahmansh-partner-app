@@ -93,6 +93,8 @@ class _HmsOneToOneAudioCallScreenState extends State<HmsOneToOneAudioCallScreen>
       _timer?.cancel();
       await walletController.getAmountList();
       walletController.update();
+      global.user.callStatus = "Online";
+      global.user.chatStatus = "Online";
       debugPrint("leave");
       await apiHelper.setAstrologerOnOffBusyline("Online");
       final prefs = await SharedPreferences.getInstance();

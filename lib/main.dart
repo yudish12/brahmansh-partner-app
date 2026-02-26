@@ -84,43 +84,36 @@ Future<void> handleBackgroundMessage(RemoteMessage message) async {
 
             break;
           case 8:
-            final prefs = await SharedPreferences.getInstance();
             print('inside background noti type 8 - showing CallKit chat notification');
-            
+
             final incomingChatId = messageData['chatId'];
-            final userName = messageData['userName'] ?? 'User';
+
+            // Synchronous duplicate check only — no await before showIncomingChat
+            // so it fires at exactly the same point as showIncomingCall does for calls.
+            // Any await before the platform channel call yields the isolate's event loop
+            // and prevents the CallKit activity from launching (calls work because they
+            // have zero awaits before showIncomingCall).
             bool shouldShowCallKit = true;
-            
-            // Check if chat is already in progress (stored in SharedPreferences or controller)
-            // Note: In background, we can't check isInChatScreen directly, but we can check
-            // if the chat was already accepted by checking ISACCEPTED flag
-            final isAlreadyAccepted = prefs.getBool(ConstantsKeys.ISACCEPTED) ?? false;
-            if (isAlreadyAccepted) {
-              log('Chat already accepted, showing simple notification in background');
-              // Note: Can't call _showSimpleChatNotification from background handler
-              // The notification will be shown when app comes to foreground
-              prefs.setBool(ConstantsKeys.ISCHATAVILABLE, true);
-              initforbackground();
-              break;
-            }
-            
-            // Try to check accepted chat IDs if controller is available
             try {
               final chatController = Get.find<ChatController>();
-              if (incomingChatId != null && chatController.acceptedChatIds.contains(incomingChatId)) {
-                log('Chat $incomingChatId already accepted (from set), skipping CallKit notification in background');
-                prefs.setBool(ConstantsKeys.ISCHATAVILABLE, true);
-                initforbackground();
-                break;
+              if (incomingChatId != null &&
+                  chatController.acceptedChatIds.contains(incomingChatId)) {
+                log('Chat $incomingChatId already accepted, skipping CallKit in background');
+                shouldShowCallKit = false;
               }
             } catch (e) {
               log('Could not check acceptedChatIds in background: $e');
             }
-            
-            prefs.setBool(ConstantsKeys.ISCHATAVILABLE, true);
-            // Show incoming chat notification with accept/reject buttons (same as call)
-            CallUtils.showIncomingChat(messageData);
+
+            if (shouldShowCallKit) {
+              CallUtils.showIncomingChat(messageData);
+            }
             initforbackground();
+
+            // Update prefs asynchronously after the show call — do NOT await before it
+            SharedPreferences.getInstance().then((prefs) {
+              prefs.setBool(ConstantsKeys.ISCHATAVILABLE, true);
+            });
             break;
           default:
             print('Unknown notification type');
@@ -363,9 +356,17 @@ class _MyAppState extends State<MyApp> {
       } else if (message.data['title'] == ConstantsKeys.EndChatFromCustomer) {
         log('EndChatFromCustomer isInChatScreen ${chatController.isInChatScreen}');
         if (chatController.isInChatScreen) {
-          chatController.updateChatScreen(false);
-          apiHelper.setAstrologerOnOffBusyline("Online");
+          // Signal that customer ended chat so chat_screen.dart's Firebase stream
+          // listener can trigger backpress() immediately (skip the 8-second debounce).
+          // Do NOT call chattimerController.resetTimer() or clear isChatTimerStarted
+          // here — those flags are checked by the Firebase stream listener to call
+          // backpress(). Clearing them would prevent proper exit and leave the screen
+          // stuck open.
+          chatController.customerEndedChatFCM.value = true;
           chatController.update();
+          global.showToast(message: 'User ended the chat');
+          // Set astrologer back online optimistically (backpress will also do this)
+          unawaited(apiHelper.setAstrologerOnOffBusyline("Online"));
         } else {
           log('do nothing chat dismiss');
         }
@@ -386,7 +387,8 @@ class _MyAppState extends State<MyApp> {
                     final incomingChatId = messageData['chatId'];
                     final userName = messageData['userName'] ?? 'User';
                     bool shouldShowCallKit = true;
-                    
+                    log('incomingChatId $incomingChatId');
+                    log('userName $userName');
                     // Check if chat is already in progress to prevent showing CallKit again
                     if (chatController.isInChatScreen) {
                       log('Chat already in progress, showing simple notification instead of CallKit');

@@ -713,10 +713,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ];
 
   void getwalletamountlist() async {
+    // log('getwalletamountlist');
     Future.wait<void>([
       dailyhoroscopeController.getHororScopeSignData(),
       walletController.withdrawWalletAmount(),
-      walletController.getAmountList()
+      walletController.getAmountList(),
       // chatController.getChatList(false),
       // callController.getCallList(false),
       // reportController.getReportList(false),

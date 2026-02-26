@@ -28,8 +28,15 @@ class SplashScreen extends BaseRoute {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-             Image.asset('assets/images/splash.png',
-             height: 20.h,),
+             ClipRRect(
+               borderRadius: BorderRadius.circular(24),
+               child: Image.asset(
+                 'assets/images/app_icon.jpeg',
+                 height: 14.h,
+                 width: 14.h,
+                 fit: BoxFit.cover,
+               ),
+             ),
               const SizedBox(
                 height: 15,
               ),

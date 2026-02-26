@@ -1113,11 +1113,15 @@ class SignupController extends GetxController {
                   log('exception in astrologer profile $e');
                 }
 
+                // Sync fresh status back to global.user so all screens read correct values
+                if (astrologerList.isNotEmpty && astrologerList[0] != null) {
+                  global.user.chatStatus = astrologerList[0]!.chatStatus;
+                  global.user.callStatus = astrologerList[0]!.callStatus;
+                }
+
                 update();
-                astrologerList[0]?.callStatus?.trim().toLowerCase() ==
-                            "online" ||
-                        astrologerList[0]?.chatStatus?.trim().toLowerCase() ==
-                            "online"
+                astrologerList[0]?.callStatus?.trim() == "Online" ||
+                        astrologerList[0]?.chatStatus?.trim() == "Online"
                     ? oflinestatus = true
                     : oflinestatus = false;
                 log('online call status is ${astrologerList[0]?.callStatus}');

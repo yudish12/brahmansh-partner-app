@@ -61,8 +61,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     children: [
                       SizedBox(height: 1.h),
                       // App Logo
-                      Image.asset('assets/images/splash.png',
-                      height: 30.h,),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(28),
+                        child: Image.asset(
+                          'assets/images/app_icon.jpeg',
+                          height: 20.h,
+                          width: 20.h,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
                       SizedBox(height: 1.h),
 
                       // Welcome Text

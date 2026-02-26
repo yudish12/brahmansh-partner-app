@@ -10,6 +10,8 @@ class ChatSession {
   final dynamic subscriptionId;
   final dynamic userFcm;
   final String? lastSaved;
+  /// End time in milliseconds since epoch. Used to hide/end chat when expired.
+  final int? chatEndedAt;
 
   ChatSession({
     required this.sessionId,
@@ -23,6 +25,7 @@ class ChatSession {
     required this.subscriptionId,
     required this.userFcm,
     this.lastSaved,
+    this.chatEndedAt,
   });
 
   Map<String, dynamic> toJson() => {
@@ -37,6 +40,7 @@ class ChatSession {
         'subscriptionId': subscriptionId,
         'userFcm': userFcm,
         "lastSaved": lastSaved ?? DateTime.now().toIso8601String(),
+        'chatEndedAt': chatEndedAt,
       };
 
   factory ChatSession.fromJson(Map<String, dynamic> json) => ChatSession(
@@ -50,6 +54,11 @@ class ChatSession {
         astrouserID: json['astrouserID'],
         subscriptionId: json['subscriptionId'],
         userFcm: json['userFcm'],
-        lastSaved: json["lastSaved"].toString(),
+        lastSaved: json["lastSaved"]?.toString(),
+        chatEndedAt: json['chatEndedAt'] != null
+            ? (json['chatEndedAt'] is int
+                ? json['chatEndedAt'] as int
+                : int.tryParse(json['chatEndedAt'].toString()))
+            : null,
       );
 }

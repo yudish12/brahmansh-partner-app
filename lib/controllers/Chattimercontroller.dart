@@ -48,9 +48,10 @@ class ChattimerController extends GetxController {
     log('Received duration: $newDurationSeconds seconds');
     final now = DateTime.now().millisecondsSinceEpoch;
     startTime = now;
-    endTime = now + (newDurationSeconds * 1000);
+    totalDuration = newDurationSeconds * 1000;
+    endTime = now + totalDuration;
     isTimerStarted = true;
-    log('Timer started: StartTime = ${(startTime ~/ 1000)}, EndTime = ${(endTime ~/ 1000)}');
+    log('Timer started: StartTime = ${(startTime ~/ 1000)}, EndTime = ${(endTime ~/ 1000)}, totalDuration = ${totalDuration ~/ 1000}s');
     update();
   }
 

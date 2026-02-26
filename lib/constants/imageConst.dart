@@ -2,7 +2,7 @@
 
 class IMAGECONST {
   static const String getxImage = "assets/images/getxImage.jpg";
-  static const String splashImage = "assets/images/splash.png";
+  static const String splashImage = "assets/images/app_icon.jpeg";
   static const String verificationImage =
       "assets/images/please_varification.png";
   static const String arrowLeft = "assets/images/arrow_left.png";

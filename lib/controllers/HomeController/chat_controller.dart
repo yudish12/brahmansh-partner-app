@@ -60,6 +60,10 @@ class ChatController extends GetxController {
   bool isInChatScreen = false;
   bool isReading = true;
   bool chatLeft = false;
+  /// Set to true by the EndChatFromCustomer FCM handler. chat_screen.dart
+  /// uses an ever() Worker on this so backpress() fires immediately without
+  /// waiting for the Firebase isInChat stream debounce.
+  RxBool customerEndedChatFCM = false.obs;
   final AudioPlayer audioPlayer = AudioPlayer();
   CollectionReference userisTypingChatCollectionRef =
       FirebaseFirestore.instance.collection("chatTyping");
@@ -120,7 +124,8 @@ class ChatController extends GetxController {
         "astrouserID": session.astrouserID,
         "subscriptionId": session.subscriptionId,
         "lastSaved": global.getStorage.read('chatStartedAt'),
-        "userFcm": session.userFcm
+        "userFcm": session.userFcm,
+        "chatEndedAt": session.chatEndedAt,
       };
       global.getStorage.write("activeChatSession", sessionData);
       final data = global.getStorage.read("activeChatSession");
@@ -541,7 +546,10 @@ class ChatController extends GetxController {
         
         global.showToast(message: tr("This chat is accepted"));
         updateChatScreen(true);
-        int duration = int.parse(chatduration);
+        final trimmed = chatduration.toString().trim();
+        int duration = int.tryParse(trimmed) ?? 0;
+        if (duration <= 0) duration = 300;
+        log('acceptChatRequest duration (seconds): $duration from "$trimmed"');
         log('sending id is $chatId');
         log('sending id firebase ${global.currentUserId}_$customerId');
         chattimercontroller.newIsStartTimer = false;
@@ -549,8 +557,12 @@ class ChatController extends GetxController {
             "chattimercontroller.newIsStartTimer:- ${chattimercontroller.newIsStartTimer}");
         global.chatStartedAt = null;
         global.getStorage.write('chatStartedAt', 0);
+        global.getStorage.remove('chatEndedAt');
+        // Reset timer before opening new chat to ensure clean state
+        chattimercontroller.resetTimer();
         await global.getStorage.save();
         print("exit time:- ${global.getStorage.read('chatStartedAt')}");
+        print("chatDuration:- $duration");
         
         // Navigate to chat screen
         Get.to(() => ChatScreen(

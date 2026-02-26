@@ -1,6 +1,7 @@
 // ignore_for_file: must_be_immutable, avoid_print, use_build_context_synchronously, deprecated_member_use
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
 import 'dart:developer' as dev;
@@ -29,6 +30,8 @@ import '../../../controllers/HomeController/call_controller.dart';
 import '../../../controllers/HomeController/chat_controller.dart';
 import '../../../controllers/HomeController/timer_controller.dart';
 import '../../../controllers/HomeController/wallet_controller.dart';
+import '../../../controllers/chatAvailability_controller.dart';
+import '../../../controllers/callAvailability_controller.dart';
 import '../../../controllers/free_kundli_controller.dart';
 import '../../../models/History/chat_history_model.dart';
 import '../../../models/chat_message_model.dart';
@@ -77,7 +80,7 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final chatController = Get.find<ChatController>();
   final callController = Get.find<CallController>();
   final timecontroller = Get.find<TimerController>();
@@ -90,9 +93,19 @@ class _ChatScreenState extends State<ChatScreen> {
   final apiHelper = APIHelper();
   final sendtextfocusnode = FocusNode();
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? userLeftChat;
+
+  /// Debounce timer: waits 20 s after isInChat goes false before ending the chat.
+  /// Not needed when EndChatFromCustomer FCM arrives — see _endChatWorker below.
+  Timer? _userLeftTimer;
+
+  /// Reacts immediately when the EndChatFromCustomer FCM arrives so backpress()
+  /// fires without waiting for the Firebase isInChat stream at all.
+  Worker? _endChatWorker;
   
   /// Track whether the user has joined the chat
   ValueNotifier<bool> isUserJoinedNotifier = ValueNotifier<bool>(false);
+  /// Timer started once when customer joins (so we don't restart on every snapshot)
+  bool _hasStartedTimerOnUserJoin = false;
 
   // Voice recording (WhatsApp-style) — max 60 seconds
   static const int _maxVoiceDurationSeconds = 60;
@@ -109,6 +122,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _voicePlayer.onPlayerComplete.listen((_) {
       if (mounted) {
         setState(() => _playingVoiceUrl = null);
@@ -124,12 +138,26 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (widget.fromrejoin == 1) {
         _initializeCountdownController();
+        _hasStartedTimerOnUserJoin = true;
       } else {
         global.isChatTimerStarted = false;
-        print("NOT FROM REJOIN");
+        // Reset timer for new chat to avoid stale endTime from previous chat
+        chattimerController.resetTimer();
+        global.getStorage.remove('chatEndedAt');
+        print("NOT FROM REJOIN - timer reset");
       }
       chatController.chatLeft = false;
       chatController.update();
+
+      // ---- DIRECT EXIT WHEN EndChatFromCustomer FCM ARRIVES ----
+      // Fires immediately (no Firebase stream, no debounce) so the astrologer
+      // exits as soon as the customer intentionally ends from their side.
+      _endChatWorker = ever(chatController.customerEndedChatFCM, (bool ended) {
+        if (!ended || !mounted || chatController.chatLeft) return;
+        _userLeftTimer?.cancel();
+        backpress(eddedfrom: "EndChatFromCustomer FCM");
+      });
+
       // ---- LISTENER FOR CUSTOMER LEAVING/JOINING CHAT ----
       userLeftChat = chatController
           .getUserOnlineStatus(
@@ -139,6 +167,8 @@ class _ChatScreenState extends State<ChatScreen> {
           .listen((snapshot) {
         if (!mounted) return;
 
+        print("snapshot, ${snapshot.data()}");
+
         bool isInChat = snapshot.data()?['isInChat'] ?? false;
 
         print("isInChat- $isInChat");
@@ -147,17 +177,82 @@ class _ChatScreenState extends State<ChatScreen> {
         // Update user joined status for enabling/disabling chat input
         isUserJoinedNotifier.value = isInChat;
 
-        if (isInChat == false && global.isChatTimerStarted == true) {
-          /// Avoid repeating exit logic
-          if (!chatController.chatLeft) {
-            chatController.chatLeft = true;
-            Get.back();
-
-            backpress(eddedfrom: "firebase stream");
+        // When customer joins: set chatStartedAt, start timer, store chatEndedAt (once)
+        if (widget.flagId != 2 && isInChat && !_hasStartedTimerOnUserJoin) {
+          _hasStartedTimerOnUserJoin = true;
+          final durationSec = _parseDurationSeconds(widget.chatduration);
+          if (durationSec > 0) {
+            final now = DateTime.now().millisecondsSinceEpoch;
+            global.chatStartedAt = now;
+            global.getStorage.write('chatStartedAt', now);
+            chattimerController.newIsStartTimer = true;
+            chattimerController.extendTimer(durationSec);
+            global.isChatTimerStarted = true;
+            final endAt = chattimerController.endTime;
+            global.getStorage.write('chatEndedAt', endAt);
+            chattimerController.update();
+            debugPrint('Chat timer started on user join: duration=${durationSec}s, endAt=$endAt');
           }
         }
+
+        if (!isInChat && (global.isChatTimerStarted == true) && !chatController.chatLeft) {
+          backpress(eddedfrom: "firebase stream - user left");
+        }
+
+        // if (isInChat == false && (global.isChatTimerStarted == true)) {
+        //   if (!chatController.chatLeft && chattimerController.isTimerStarted) {
+        //     _userLeftTimer?.cancel();
+
+        //     // If the EndChatFromCustomer FCM already arrived we know the customer
+        //     // intentionally ended the session — exit immediately.
+        //     // Otherwise use a 20-second grace period. On mobile, customers frequently
+        //     // background the app (incoming call, screen lock, switching apps) for more
+        //     // than 8 seconds without intending to end the chat. The FCM signal is the
+        //     // authoritative "intentional end" — the Firebase isInChat stream is only
+        //     // used as a fallback for cases where the FCM never arrives (app crash, etc.).
+        //     final delay = chatController.customerEndedChatFCM
+        //         ? const Duration(milliseconds: 300)
+        //         : const Duration(seconds: 20);
+
+        //     _userLeftTimer = Timer(delay, () {
+        //       if (!mounted) return;
+        //       if (!chatController.chatLeft && chattimerController.isTimerStarted) {
+        //         // backpress() handles all navigation — do NOT call Get.back() here
+        //         // because backpress() already calls Get.back() internally.
+        //         backpress(eddedfrom: "firebase stream");
+        //       }
+        //     });
+        //   }
+        // } else if (isInChat == true) {
+        //   // Customer is back within the grace window — cancel the pending end.
+        //   _userLeftTimer?.cancel();
+        // }
       });
     });
+  }
+
+  int _parseDurationSeconds(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value > 0 ? value : 0;
+    final parsed = int.tryParse(value.toString().trim());
+    return (parsed != null && parsed > 0) ? parsed : 0;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state != AppLifecycleState.resumed || widget.flagId == 2) return;
+    if (!mounted) return;
+    // Only check if chat timer was actually started (user joined) and we're in active chat
+    if ((global.isChatTimerStarted == true) &&
+        chattimerController.isTimerStarted &&
+        chattimerController.endTime > 0) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      if (now >= chattimerController.endTime) {
+        debugPrint('App resumed: chat time already ended, calling backpress');
+        backpress(eddedfrom: "app resumed after end time");
+      }
+    }
   }
 
   void _showprints() {
@@ -175,7 +270,6 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _updateOnlineStatus() {
-    apiHelper.setAstrologerOnOffBusyline("Busy");
     global.inChatscreen(true);
     global.firebaseChatId = widget.fireBasechatId;
     global.isCallOrChat = 1;
@@ -188,11 +282,18 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _initializeCountdownController() {
-    final endTime = DateTime.now().millisecondsSinceEpoch +
-        1000 * int.parse(widget.chatduration.toString());
-    chattimerController.endTime = endTime;
+    final durationSec = _parseDurationSeconds(widget.chatduration);
+    final safeSec = durationSec > 0 ? durationSec : 60;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    chattimerController.totalDuration = safeSec * 1000;
+    chattimerController.endTime = now + (safeSec * 1000);
+    chattimerController.isTimerStarted = true;
+    // Must also set global flag so the Firebase stream exit condition fires
+    // for rejoin sessions (same guard used for normal sessions).
+    global.isChatTimerStarted = true;
+    global.getStorage.write('chatEndedAt', chattimerController.endTime);
     chattimerController.update();
-    debugPrint("New time After Update $endTime");
+    debugPrint("Rejoin: endTime=${chattimerController.endTime}, totalDuration=${chattimerController.totalDuration}");
   }
 
   Future<bool> _requestMicPermission() async {
@@ -431,6 +532,11 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _updateChatSession() {
+    print("chatduration:- ${widget.chatduration}");
+    final lastSaved = global.getStorage.read('chatStartedAt');
+    final chatEndedAt = chattimerController.endTime > 0
+        ? chattimerController.endTime
+        : (global.getStorage.read('chatEndedAt') as int?);
     final session = ChatSession(
         sessionId: '${widget.customerId}_${widget.astrologerId}',
         customerId: widget.customerId,
@@ -438,20 +544,27 @@ class _ChatScreenState extends State<ChatScreen> {
         fireBasechatId: widget.fireBasechatId ?? chatController.firebaseChatId,
         customerName: widget.customerName,
         customerProfile: widget.customerProfile,
-        chatduration: (chattimerController.totalDuration ~/ 1000).toString(),
+        chatduration: widget.chatduration,
         astrouserID: widget.astrouserID,
         userFcm: widget.fcmToken,
         subscriptionId: widget.subscriptionId,
-        lastSaved: global.getStorage.read('chatStartedAt').toString());
-    print(
-        "last saved used ${global.getStorage.read('chatStartedAt').toString()}");
-    Get.find<ChatController>().addSession(session); //add session
+        lastSaved: lastSaved?.toString(),
+        chatEndedAt: chatEndedAt);
+    print("last saved used ${lastSaved?.toString()}, chatEndedAt=$chatEndedAt");
+    Get.find<ChatController>().addSession(session);
+    // Reset timer when leaving via back so next chat doesn't see stale endTime
+    chattimerController.resetTimer();
+    global.getStorage.remove('chatEndedAt');
     Get.to(() => HomeScreen());
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     log('chat screen ondispose online ');
+    userLeftChat?.cancel();
+    _userLeftTimer?.cancel();
+    _endChatWorker?.dispose();
     _recordTimer?.cancel();
     if (_isRecording) {
       _audioRecorder.stop().ignore();
@@ -473,7 +586,7 @@ class _ChatScreenState extends State<ChatScreen> {
             Get.back();
           } else {
             chatController.isReading = false;
-            log('else ${chatController.isReading}');
+            log('pop invoked else ${chatController.isReading} ${widget.chatduration} ${chattimerController.totalDuration} ${chattimerController.totalDuration ~/ 1000} ${global.chatStartedAt}');
             _updateChatSession();
           }
         }
@@ -1591,8 +1704,13 @@ class _ChatScreenState extends State<ChatScreen> {
     await prefs.setBool(ConstantsKeys.ISACCEPTED, false);
     await prefs.setString(ConstantsKeys.ISACCEPTEDDATA, '');
     await prefs.setBool(ConstantsKeys.ISREJECTED, false);
+    // Clear the chat-available flag so loadAllData() doesn't redirect to ChatTab
+    // after the session is already over (flag is only cleared by ChatTab itself
+    // otherwise, causing a spurious ChatTab push if the app reloads post-chat).
+    await prefs.setBool(ConstantsKeys.ISCHATAVILABLE, false);
     global.isChatTimerStarted = false;
     callController.newIsStartTimer = false;
+    chattimerController.newIsStartTimer = false;
     chattimerController.isTimerStarted = false;
     chattimerController.update();
     callController.update();
@@ -1603,11 +1721,12 @@ class _ChatScreenState extends State<ChatScreen> {
       final session = chatController.activeSessions.values.first;
       log('removed session is $session');
       Get.find<ChatController>().removeSession(session.sessionId,
-          firebasechatId: widget.fireBasechatId);
+          firebasechatId: session.fireBasechatId);
     } else {
       log('No active audio call sessions found');
     }
     chatController.chatLeft = true;
+    chatController.customerEndedChatFCM.value = false;
     chatController.update();
     if (widget.flagId == 1) {
       global.inChatscreen(false);
@@ -1616,31 +1735,38 @@ class _ChatScreenState extends State<ChatScreen> {
       chatController.sendMessage('${global.user.name} -> ended chat',
           widget.customerId, true, "chat_screen_backpress");
 
-      bool success = await apiHelper.setAstrologerOnOffBusyline("Online");
+      // Keep astrologer Online when chat ends: update local state first so UI never shows Offline
+      global.user.chatStatus = 'Online';
+      global.user.callStatus = 'Online';
+      try {
+        await global.sp?.setString(
+            ConstantsKeys.CURRENTUSER, json.encode(global.user.toJson()));
+      } catch (_) {}
+      Get.find<ChatAvailabilityController>().setChatAvailability(1, 'Online');
+      Get.find<CallAvailabilityController>().setCallAvailability(1, 'Online');
+      signupController.oflinestatus = true;
+      signupController.update();
 
-      if (success) {
-        log('Astrologer status set to Online successfully');
-        signupController.oflinestatus = true;
-        signupController.update();
-        Get.back();
-        chatController.isInChatScreen = false;
-        global.getStorage.write('chatStartedAt', 0);
-        await global.getStorage.save();
-        print("exit time:- ${global.getStorage.read('chatStartedAt')}");
-        chatController.update();
-      } else {
-        log('Failed to set Astrologer status to Online');
-      }
-      Future.wait([
+      await apiHelper.setAstrologerOnOffBusyline("Online");
+
+      Get.back();
+      chatController.isInChatScreen = false;
+      global.getStorage.write('chatStartedAt', 0);
+      global.getStorage.remove('chatEndedAt');
+      await global.getStorage.save();
+      print("exit time:- ${global.getStorage.read('chatStartedAt')}");
+      chatController.update();
+      // Fire-and-forget profile refresh after navigation
+      unawaited(Future.wait([
         Get.find<SignupController>().astrologerProfileById(false),
-      ]);
-      chatController.setOnlineStatus(
-          false, widget.fireBasechatId.toString(), '${global.currentUserId}',
-          extiform: "form back press");
+      ]));
 
+      // After Get.back() the widget is unmounted — use the navigator overlay context
+      final dialogCtx = Get.overlayContext;
+      if (dialogCtx == null) return;
       showDialog<void>(
-        context: context,
-        barrierDismissible: false, 
+        context: dialogCtx,
+        barrierDismissible: false,
         builder: (BuildContext context) {
           return AlertDialog(
             contentPadding: EdgeInsets.zero,

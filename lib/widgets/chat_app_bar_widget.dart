@@ -132,21 +132,26 @@ class _MyCustomAppBarState extends State<ChatAppBar> {
                               TextStyle(fontSize: 13.sp, color: COLORS().textColor),
                         ),
                       ),
-                      chattimercontroller.newIsStartTimer == true ||
-                              widget.flagid == 1
-                          ? status()
-                          : widget.flagid == 2
-                              ? const SizedBox()
-                              : Container(
-                                  padding: const EdgeInsets.only(left: 10),
-                                  child: Text(
-                                    'waiting to join..',
-                                    style: TextStyle(
-                                        color: Colors.black,
-                                        fontWeight: FontWeight.w400,
-                                        fontSize: 12.sp),
-                                  ),
+                    // Only show the countdown when the timer has actually started
+                    // (user joined). Removing `|| widget.flagid == 1` prevents the
+                    // timer from appearing before the customer joins — previously
+                    // status() was always called for flagid==1, but status() returns
+                    // SizedBox.shrink() when endTime==0, and the "waiting to join"
+                    // text was never shown because it was in the unreachable else branch.
+                    chattimercontroller.newIsStartTimer == true
+                        ? status()
+                        : widget.flagid == 2
+                            ? const SizedBox()
+                            : Container(
+                                padding: const EdgeInsets.only(left: 10),
+                                child: Text(
+                                  'waiting to join..',
+                                  style: TextStyle(
+                                      color: Colors.black,
+                                      fontWeight: FontWeight.w400,
+                                      fontSize: 12.sp),
                                 ),
+                              ),
                     ],
                   );
                 }),
@@ -224,11 +229,12 @@ class _MyCustomAppBarState extends State<ChatAppBar> {
               final now = DateTime.now().millisecondsSinceEpoch;
               if (now >= chattimercontroller.endTime) {
                 debugPrint(
-                    'Timer ended - leave triggered ${chattimercontroller.endTime}');
+                    'Timer ended naturally - ending chat ${chattimercontroller.endTime}');
+                backpress();
               } else {
                 debugPrint(
                     '⚠️ Timer onEnd triggered early, ignored. ${chattimercontroller.endTime}');
-                backpress();
+                // Don't call backpress on early end - timer widget might be rebuilding
               }
             } else {
               print("else");
@@ -256,16 +262,27 @@ class _MyCustomAppBarState extends State<ChatAppBar> {
     await prefs.setBool(ConstantsKeys.ISACCEPTED, false);
     await prefs.setString(ConstantsKeys.ISACCEPTEDDATA, '');
     await prefs.setBool(ConstantsKeys.ISREJECTED, false);
+    // Clear the chat-available flag so loadAllData() doesn't redirect to ChatTab
+    // after the session ends (same fix applied in chat_screen.dart backpress).
+    await prefs.setBool(ConstantsKeys.ISCHATAVILABLE, false);
     callController.newIsStartTimer = false;
+    chattimerController.newIsStartTimer = false;
     chattimerController.isTimerStarted = false;
     chattimerController.update();
     callController.update();
     chattimerController.resetTimer();
     global.chatStartedAt = null;
+    global.isChatTimerStarted = false;
+    global.getStorage.remove('chatEndedAt');
+
+    // Mark chatLeft so the Firebase stream debounce timer in chat_screen.dart
+    // doesn't fire a second exit if customer disconnects around the same time.
+    chatController.chatLeft = true;
+    chatController.customerEndedChatFCM.value = false;
 
     if (chatController.activeSessions.values.isNotEmpty) {
       final session = chatController.activeSessions.values.first;
-      Get.find<ChatController>().removeSession(session.sessionId);
+      Get.find<ChatController>().removeSession(session.sessionId, firebasechatId: session.fireBasechatId);
     } else {
       log('No active audio call sessions found');
     }

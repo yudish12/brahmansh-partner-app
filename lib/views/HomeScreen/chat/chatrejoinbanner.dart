@@ -40,16 +40,36 @@ class _ChatRejoinBannerState extends State<ChatRejoinBanner> {
     super.initState();
   }
 
+  /// Returns chat end time in ms (epoch). From session.chatEndedAt or computed from lastSaved + duration.
+  int? _getChatEndedAtMs(ChatSession session) {
+    if (session.chatEndedAt != null && session.chatEndedAt! > 0) {
+      return session.chatEndedAt;
+    }
+    final start = _parseChatStartedAt(session.lastSaved);
+    final sec = _parseChatDurationSeconds(session.chatduration) ?? 0;
+    if (start != null && sec > 0) return start + (sec * 1000);
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return GetBuilder<ChatController>(
       builder: (sessionController) {
         if (sessionController.activeSessions.isEmpty) {
-          // No active sessions
-          print('no Active session For chat');
           return const SizedBox.shrink();
         }
         final session = sessionController.activeSessions.values.first;
+        final endedAt = _getChatEndedAtMs(session);
+        final now = DateTime.now().millisecondsSinceEpoch;
+        if (endedAt != null && now >= endedAt) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (sessionController.activeSessions.containsKey(session.sessionId)) {
+              backpress(session);
+              global.showToast(message: 'Chat Time Expired');
+            }
+          });
+          return const SizedBox.shrink();
+        }
         return InkWell(
           onTap: () {
             debugPrint('rejoin chat seession is $session');
@@ -111,6 +131,7 @@ class _ChatRejoinBannerState extends State<ChatRejoinBanner> {
   void backpress(ChatSession session) async {
     global.chatStartedAt = null;
     global.getStorage.write('chatStartedAt', 0);
+    global.getStorage.remove('chatEndedAt');
     WidgetsBinding.instance.addPostFrameCallback((_) {
       debugPrint('inside it appbar click');
       chattimerController.newIsStartTimer = false;
@@ -127,7 +148,8 @@ class _ChatRejoinBannerState extends State<ChatRejoinBanner> {
         "chatRejoin");
     await apiHelper.setAstrologerOnOffBusyline("Online");
     await signupController.astrologerProfileById(false);
-    chatController.removeSession(session.sessionId);
+    chatController.removeSession(session.sessionId,
+        firebasechatId: session.fireBasechatId);
     showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -195,23 +217,58 @@ class _ChatRejoinBannerState extends State<ChatRejoinBanner> {
     return "$hours:$minutes:$secs";
   }
 
+  /// Parses a value to int (ms). Returns null if 0, null, or invalid.
+  int? _parseChatStartedAt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value > 0 ? value : null;
+    final s = value.toString().trim();
+    if (s.isEmpty || s == '0') return null;
+    final parsed = int.tryParse(s);
+    return (parsed != null && parsed > 0) ? parsed : null;
+  }
+
+  /// Parses session chat duration to seconds. Returns null if invalid.
+  int? _parseChatDurationSeconds(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value >= 0 ? value : null;
+    final s = value.toString().trim();
+    if (s.isEmpty) return null;
+    final parsed = int.tryParse(s);
+    return (parsed != null && parsed >= 0) ? parsed : null;
+  }
+
   void _rejoinChat(ChatSession session) async {
-    print("global.chatStartedAt: ${global.chatStartedAt}");
-    print(
-        "session.chatduration.toString(): ${session.chatduration.toString()}");
-    int chatStartedAt =
-        global.chatStartedAt ?? global.getStorage.read('chatStartedAt');
-    print(
-        '_rejoinChat chat started at $chatStartedAt from storage ${global.getStorage.read('chatStartedAt')} chat deration ${session.chatduration}');
+    debugPrint("global.chatStartedAt: ${global.chatStartedAt}");
+    debugPrint(
+        "session.chatduration: ${session.chatduration}, lastSaved: ${session.lastSaved}");
+    debugPrint("session: ${session}");
+    final fromGlobal = _parseChatStartedAt(global.chatStartedAt);
+    final fromStorage =
+        _parseChatStartedAt(global.getStorage.read('chatStartedAt'));
+    final fromLastSaved = _parseChatStartedAt(session.lastSaved);
+    final int? chatStartedAt = fromGlobal ?? fromStorage ?? fromLastSaved;
+
+    final int totalDurationSeconds =
+        _parseChatDurationSeconds(session.chatduration) ?? 0;
+    print("totalDurationSeconds:- $totalDurationSeconds");
+
     await Future.delayed(const Duration(milliseconds: 100));
-    final dt = DateTime.fromMillisecondsSinceEpoch(chatStartedAt);
     final now = DateTime.now().millisecondsSinceEpoch;
-    final totalTimeElapsed = ((now - chatStartedAt) / 1000).toInt();
-    final remainingTime =
-        max(0, int.parse(session.chatduration.toString()) - totalTimeElapsed);
-    final readableTime = formatDurationHMS(remainingTime);
-    print(
-        'chat StartedAt to rejoining -> ${DateFormat('hh:mm a').format(dt)} and remaing time is $readableTime');
+
+    int remainingTime;
+    if (chatStartedAt == null || chatStartedAt <= 0) {
+      print("totalDurationSeconds:- $totalDurationSeconds");
+      remainingTime = totalDurationSeconds > 0 ? totalDurationSeconds : 60;
+      debugPrint(
+          '_rejoinChat: no valid chatStartedAt (g=$fromGlobal, s=$fromStorage, last=$fromLastSaved), using full duration: $remainingTime s');
+    } else {
+      
+      final totalTimeElapsed = ((now - chatStartedAt) / 1000).toInt();
+      remainingTime = max(0, totalDurationSeconds - totalTimeElapsed);
+      final dt = DateTime.fromMillisecondsSinceEpoch(chatStartedAt);
+      debugPrint(
+          'chat StartedAt -> ${DateFormat('hh:mm a').format(dt)}, elapsed ${totalTimeElapsed}s, remaining ${formatDurationHMS(remainingTime)}');
+    }
 
     if (remainingTime <= 0) {
       debugPrint('⚠️ Chat time expired, not rejoining');

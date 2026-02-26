@@ -439,13 +439,13 @@ class _AcceptCallScreenState extends State<AcceptCallScreen> {
       log('No active audio call sessions found');
     }
     ForegroundServiceManager.stopForegroundTask();
-    apiHelper.setAstrologerOnOffBusyline("Online");
+    // read back chatStatus:"Busy" before addStatus (chat) had finished writing "Online".
+    await apiHelper.setAstrologerOnOffBusyline("Online");
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) async {
       global.inCallscreen(false);
       await walletController.getAmountList();
       walletController.update();
       debugPrint("leave");
-      // await apiHelper.setAstrologerOnOffBusyline("Online");
     });
     await Get.find<SignupController>().astrologerProfileById(false);
 

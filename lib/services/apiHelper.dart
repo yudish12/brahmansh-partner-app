@@ -748,7 +748,7 @@ class APIHelper {
         body: json.encode({
           "contactNo": contactNo,
           'email': email,
-          'userDeviceDetails': userDeviceDetails,
+          "userDeviceDetails": userDeviceDetails.toJson(),
         }),
       );
       log('responselogin:- ${response.body}');

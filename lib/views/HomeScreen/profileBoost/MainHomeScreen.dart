@@ -49,6 +49,7 @@ import '../poojaModule/poojaOrderScreen.dart';
 import '../products/productScreen.dart';
 import '../tabs/callTab.dart';
 import '../tabs/chatTab.dart';
+import '../tabs/waitlist_tab.dart';
 import '../../../controllers/chatAvailability_controller.dart';
 import '../../../controllers/callAvailability_controller.dart';
 
@@ -90,6 +91,9 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
 
   /// Load initial chat/call status from global.user
   void _loadInitialStatus() {
+    log('loadInitialStatus');
+    log('userChatStatus ${global.user.chatStatus}');
+    log('userCallStatus ${global.user.callStatus}');
     // Load chat status
     final userChatStatus = global.user.chatStatus ?? "Offline";
     isChatOnline = userChatStatus == "Online";
@@ -100,7 +104,12 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
     isCallOnline = userCallStatus == "Online";
     callStatus = userCallStatus;
 
-    setState(() {});
+    setState(() {
+      isChatOnline = userChatStatus == "Online";
+      chatStatus = userChatStatus;
+      isCallOnline = userCallStatus == "Online";
+      callStatus = userCallStatus;
+    });
   }
 
   Widget _availabilityCard() {
@@ -163,7 +172,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
               Text(title,
                   style:
                       TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600)),
-              Text(rate, style: TextStyle(fontSize: 10.sp, color: Colors.grey)),
+              // Text(rate, style: TextStyle(fontSize: 10.sp, color: Colors.grey)),
             ],
           ),
         ),
@@ -435,11 +444,27 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                     padding: EdgeInsets.all(3.w),
                     child: Column(
                       children: [
-                        _availabilityCard(),
-                        SizedBox(height: 1.5.h),
-                        _earningCard(),
-                        SizedBox(height: 1.5.h),
-                        _todayProgressCard(),
+                        GetBuilder<SignupController>(
+                          builder: (ctrl) {
+                            // Re-sync toggle state whenever the controller updates
+                            if (ctrl.astrologerList.isNotEmpty &&
+                                ctrl.astrologerList[0] != null) {
+                              final freshChat =
+                                  ctrl.astrologerList[0]!.chatStatus ?? "Offline";
+                              final freshCall =
+                                  ctrl.astrologerList[0]!.callStatus ?? "Offline";
+                              isChatOnline = freshChat == "Online";
+                              chatStatus = freshChat;
+                              isCallOnline = freshCall == "Online";
+                              callStatus = freshCall;
+                            }
+                            return _availabilityCard();
+                          },
+                        ),
+                        // SizedBox(height: 1.5.h),
+                        // _earningCard(),
+                        // SizedBox(height: 1.5.h),
+                        // _todayProgressCard(),
                         SizedBox(height: 1.5.h),
 
                         /// ---------------- BOOST YOUR PROFILE CARD ----------------
@@ -555,7 +580,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                         _rowWrapper([
                           _homeBtn("Waitlist", Colors.redAccent, null,
                               asset: 'assets/images/free_kundli.png',
-                              onTap: () => Get.to(() => const KundaliScreen())),
+                              onTap: () => Get.to(() => const WaitlistTab())),
                           GetBuilder<SignupController>(
                             builder: (signupcontroller) => signupcontroller
                                         .astrologerList.isNotEmpty &&
