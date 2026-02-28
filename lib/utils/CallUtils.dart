@@ -116,7 +116,8 @@ class CallUtils {
         isCustomNotification: true,
         isShowLogo: true,
         isShowFullLockedScreen: true,
-        ringtonePath: 'system_ringtone_default', // Same ringtone as call
+        isImportant: true,
+        ringtonePath: 'system_ringtone_default',
         backgroundColor: '#EA6C10',
         actionColor: '#4CAF50',
         textColor: '#ffffff',

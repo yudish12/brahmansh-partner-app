@@ -291,6 +291,9 @@ class _MyCustomAppBarState extends State<ChatAppBar> {
     global.inChatscreen(false);
     chatController.sendMessage('${global.user.name} -> ended chat',
         widget.customerid!, true, "chat_app_bar_widget");
+    chatController.setOnlineStatus(
+        false, widget.firebasechatid.toString(), '${global.currentUserId}',
+        extiform: "form back press");
 
     bool success = await apiHelper.setAstrologerOnOffBusyline("Online");
     if (success) {
@@ -305,11 +308,7 @@ class _MyCustomAppBarState extends State<ChatAppBar> {
     }
     Future.wait([
       Get.find<SignupController>().astrologerProfileById(false),
-      // walletController.getAmountList()
     ]);
-    chatController.setOnlineStatus(
-        false, widget.firebasechatid.toString(), '${global.currentUserId}',
-        extiform: "form back press");
 
     showDialog<void>(
       context: context,

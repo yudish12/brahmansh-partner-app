@@ -47,6 +47,7 @@ class ChattimerController extends GetxController {
   void extendTimer(int newDurationSeconds) {
     log('Received duration: $newDurationSeconds seconds');
     final now = DateTime.now().millisecondsSinceEpoch;
+    currentTime = now;
     startTime = now;
     totalDuration = newDurationSeconds * 1000;
     endTime = now + totalDuration;

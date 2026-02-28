@@ -101,11 +101,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// Reacts immediately when the EndChatFromCustomer FCM arrives so backpress()
   /// fires without waiting for the Firebase isInChat stream at all.
   Worker? _endChatWorker;
-  
+
   /// Track whether the user has joined the chat
   ValueNotifier<bool> isUserJoinedNotifier = ValueNotifier<bool>(false);
+
   /// Timer started once when customer joins (so we don't restart on every snapshot)
   bool _hasStartedTimerOnUserJoin = false;
+
+  /// Tracks previous isInChat value so we only exit on a true → false transition,
+  /// not when the first snapshot arrives as false (customer hasn't joined yet).
+  bool? _previousIsInChat;
 
   // Voice recording (WhatsApp-style) — max 60 seconds
   static const int _maxVoiceDurationSeconds = 60;
@@ -141,12 +146,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _hasStartedTimerOnUserJoin = true;
       } else {
         global.isChatTimerStarted = false;
-        // Reset timer for new chat to avoid stale endTime from previous chat
+        chattimerController.newIsStartTimer = false;
         chattimerController.resetTimer();
+        global.chatStartedAt = null;
+        global.getStorage.write('chatStartedAt', 0);
         global.getStorage.remove('chatEndedAt');
-        print("NOT FROM REJOIN - timer reset");
+        _hasStartedTimerOnUserJoin = false;
+        debugPrint("NOT FROM REJOIN - full timer reset");
       }
       chatController.chatLeft = false;
+      chatController.customerEndedChatFCM.value = false;
       chatController.update();
 
       // ---- DIRECT EXIT WHEN EndChatFromCustomer FCM ARRIVES ----
@@ -171,13 +180,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
         bool isInChat = snapshot.data()?['isInChat'] ?? false;
 
-        print("isInChat- $isInChat");
-        print("global.isChatTimerStarted- ${global.isChatTimerStarted}");
+        print(
+            "isInChat- $isInChat, _previousIsInChat- $_previousIsInChat, _hasStartedTimerOnUserJoin- $_hasStartedTimerOnUserJoin");
+        print(
+            "newIsStartTimer- ${chattimerController.newIsStartTimer}, endTime- ${chattimerController.endTime}, chatduration- ${widget.chatduration}");
 
         // Update user joined status for enabling/disabling chat input
         isUserJoinedNotifier.value = isInChat;
 
-        // When customer joins: set chatStartedAt, start timer, store chatEndedAt (once)
+        // Start timer once when customer joins
         if (widget.flagId != 2 && isInChat && !_hasStartedTimerOnUserJoin) {
           _hasStartedTimerOnUserJoin = true;
           final durationSec = _parseDurationSeconds(widget.chatduration);
@@ -188,16 +199,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             chattimerController.newIsStartTimer = true;
             chattimerController.extendTimer(durationSec);
             global.isChatTimerStarted = true;
-            final endAt = chattimerController.endTime;
-            global.getStorage.write('chatEndedAt', endAt);
+            global.getStorage.write('chatEndedAt', chattimerController.endTime);
             chattimerController.update();
-            debugPrint('Chat timer started on user join: duration=${durationSec}s, endAt=$endAt');
+            debugPrint('Chat timer started on user join: duration=${durationSec}s');
           }
         }
 
-        if (!isInChat && (global.isChatTimerStarted == true) && !chatController.chatLeft) {
-          backpress(eddedfrom: "firebase stream - user left");
-        }
+        // Exit is handled by EndChatFromCustomer FCM (via _endChatWorker).
+        // The Firebase isInChat stream is NOT used for exit because the
+        // customer's isInChat flickers for extended periods (dispose/recreate,
+        // app lifecycle) making any debounce unreliable.
+        _previousIsInChat = isInChat;
 
         // if (isInChat == false && (global.isChatTimerStarted == true)) {
         //   if (!chatController.chatLeft && chattimerController.isTimerStarted) {
@@ -293,7 +305,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     global.isChatTimerStarted = true;
     global.getStorage.write('chatEndedAt', chattimerController.endTime);
     chattimerController.update();
-    debugPrint("Rejoin: endTime=${chattimerController.endTime}, totalDuration=${chattimerController.totalDuration}");
+    debugPrint(
+        "Rejoin: endTime=${chattimerController.endTime}, totalDuration=${chattimerController.totalDuration}");
   }
 
   Future<bool> _requestMicPermission() async {
@@ -314,7 +327,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
     try {
       final dir = await getTemporaryDirectory();
-      final path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      final path =
+          '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
       final canRecord = await _audioRecorder.hasPermission();
       if (!canRecord) {
         global.showToast(
@@ -323,7 +337,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         );
         return;
       }
-      await _audioRecorder.start(const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
+      await _audioRecorder
+          .start(const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
       _currentRecordPath = path;
       _isRecording = true;
       _recordSeconds = 0;
@@ -390,9 +405,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   static bool _isVoiceMessage(ChatMessageModel msg) {
-    if (msg.attachementPath == null || msg.attachementPath!.isEmpty) return false;
+    if (msg.attachementPath == null || msg.attachementPath!.isEmpty)
+      return false;
     final p = msg.attachementPath!.toLowerCase();
-    return p.contains('.m4a') || p.contains('.aac') || p.contains('.mp3') ||
+    return p.contains('.m4a') ||
+        p.contains('.aac') ||
+        p.contains('.mp3') ||
         msg.message == 'Voice message';
   }
 
@@ -414,7 +432,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
         decoration: BoxDecoration(
-          color: chatController.isMe ? const Color(0xFFfbf1f2) : Colors.grey.shade100,
+          color: chatController.isMe
+              ? const Color(0xFFfbf1f2)
+              : Colors.grey.shade100,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -449,7 +469,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Widget _buildRecordingStrip() {
     final minutes = _recordSeconds ~/ 60;
     final secs = _recordSeconds % 60;
-    final timeStr = '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+    final timeStr =
+        '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
     final nearLimit = _recordSeconds >= _maxVoiceDurationSeconds - 10;
     return Container(
       margin: EdgeInsets.fromLTRB(8, 0, 8, 1.h),
@@ -482,7 +503,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       timeStr,
                       style: TextStyle(
                         fontSize: 14.sp,
-                        color: nearLimit ? Colors.orange.shade800 : Colors.black87,
+                        color:
+                            nearLimit ? Colors.orange.shade800 : Colors.black87,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -612,7 +634,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 _updateChatSession();
               }
             },
-            child:  Icon(Icons.arrow_back, color: COLORS().textColor),
+            child: Icon(Icons.arrow_back, color: COLORS().textColor),
           ),
           actions: [
             InkWell(
@@ -630,7 +652,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   child: Text(
                     'Kundli',
                     style: TextStyle(
-                        color:COLORS().textColor,
+                        color: COLORS().textColor,
                         fontSize: 11.sp,
                         fontWeight: FontWeight.w500),
                   ),
@@ -694,382 +716,385 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       return Column(
                         children: [
                           Expanded(
-                            child: StreamBuilder<
-                                    QuerySnapshot<Map<String, dynamic>>>(
-                                stream: chatController.getChatMessages(
-                                    widget.fireBasechatId == null
-                                        ? chatController.firebaseChatId
-                                        : widget.fireBasechatId!,
-                                    widget.astrologerId),
-                                builder: (context, snapshot) {
-                                  if (snapshot.hasError) {
-                                    return Text(
-                                        'snapShotError :- ${snapshot.error}');
-                                  } else {
-                                    List<ChatMessageModel> messageList = [];
+                            child:
+                                StreamBuilder<
+                                        QuerySnapshot<Map<String, dynamic>>>(
+                                    stream: chatController.getChatMessages(
+                                        widget.fireBasechatId == null
+                                            ? chatController.firebaseChatId
+                                            : widget.fireBasechatId!,
+                                        widget.astrologerId),
+                                    builder: (context, snapshot) {
+                                      if (snapshot.hasError) {
+                                        return Text(
+                                            'snapShotError :- ${snapshot.error}');
+                                      } else {
+                                        List<ChatMessageModel> messageList = [];
 
-                                    if (snapshot.hasData) {
-                                      for (var res in snapshot.data!.docs) {
-                                        messageList.add(
-                                            ChatMessageModel.fromJson(
-                                                res.data()));
-                                      }
-                                    } else {
-                                      messageList = [];
-                                      log('no data for msg');
-                                    }
+                                        if (snapshot.hasData) {
+                                          for (var res in snapshot.data!.docs) {
+                                            messageList.add(
+                                                ChatMessageModel.fromJson(
+                                                    res.data()));
+                                          }
+                                        } else {
+                                          messageList = [];
+                                          log('no data for msg');
+                                        }
 
-                                    chatController.isReading == true
-                                        ? chatController.markMessagesAsRead(
-                                            widget.fireBasechatId == null
-                                                ? chatController.firebaseChatId
-                                                : widget.fireBasechatId!,
-                                            widget.customerId)
-                                        : null;
+                                        chatController.isReading == true
+                                            ? chatController.markMessagesAsRead(
+                                                widget.fireBasechatId == null
+                                                    ? chatController
+                                                        .firebaseChatId
+                                                    : widget.fireBasechatId!,
+                                                widget.customerId)
+                                            : null;
 
-                                    return ListView.builder(
-                                        physics: const BouncingScrollPhysics(),
-                                        padding: EdgeInsets.only(bottom: 10.h),
-                                        itemCount: messageList.length,
-                                        shrinkWrap: true,
-                                        reverse: true,
-                                        itemBuilder: (context, index) {
-                                          ChatMessageModel message =
-                                              messageList[index];
-                                          chatController.isMe =
-                                              message.userId1 ==
-                                                  '${global.currentUserId}';
-                                          print(
-                                              'isread index- $index - ${messageList[index].isRead}');
-                                          return messageList[index]
-                                                      .isEndMessage ==
-                                                  true
-                                              ? Container(
-                                                  color: const Color.fromARGB(
-                                                      255, 247, 244, 211),
-                                                  margin: const EdgeInsets.only(
-                                                      bottom: 10),
-                                                  padding:
-                                                      const EdgeInsets.all(8),
-                                                  alignment: Alignment.center,
-                                                  child: Text(
-                                                    messageList[index].message!,
-                                                    style: const TextStyle(
-                                                      color: Colors.grey,
-                                                    ),
-                                                    textAlign: TextAlign.center,
-                                                  ),
-                                                )
-                                              : Row(
-                                                  mainAxisAlignment:
-                                                      chatController.isMe
-                                                          ? MainAxisAlignment
-                                                              .end
-                                                          : MainAxisAlignment
-                                                              .start,
-                                                  crossAxisAlignment:
-                                                      chatController.isMe
-                                                          ? CrossAxisAlignment
-                                                              .end
-                                                          : CrossAxisAlignment
-                                                              .start,
-                                                  children: [
-                                                    Container(
-                                                      decoration: BoxDecoration(
-                                                        color: chatController
-                                                                .isMe
-                                                            ? messageList[index]
-                                                                        .attachementPath ==
-                                                                    ""
-                                                                ? const Color
-                                                                    .fromARGB(
-                                                                    255,
-                                                                    247,
-                                                                    244,
-                                                                    211)
-                                                                : Colors.white
-                                                            : messageList[index]
-                                                                        .attachementPath ==
-                                                                    ""
-                                                                ? Colors.grey
-                                                                    .shade100
-                                                                : Colors.white,
-                                                        borderRadius:
-                                                            BorderRadius.only(
-                                                          topLeft: const Radius
-                                                              .circular(12),
-                                                          topRight: const Radius
-                                                              .circular(12),
-                                                          bottomLeft:
-                                                              chatController
-                                                                      .isMe
-                                                                  ? const Radius
-                                                                      .circular(
-                                                                      0)
-                                                                  : const Radius
-                                                                      .circular(
-                                                                      12),
-                                                          bottomRight:
-                                                              chatController
-                                                                      .isMe
-                                                                  ? const Radius
-                                                                      .circular(
-                                                                      0)
-                                                                  : const Radius
-                                                                      .circular(
-                                                                      12),
+                                        return ListView.builder(
+                                            physics:
+                                                const BouncingScrollPhysics(),
+                                            padding:
+                                                EdgeInsets.only(bottom: 10.h),
+                                            itemCount: messageList.length,
+                                            shrinkWrap: true,
+                                            reverse: true,
+                                            itemBuilder: (context, index) {
+                                              ChatMessageModel message =
+                                                  messageList[index];
+                                              chatController.isMe =
+                                                  message.userId1 ==
+                                                      '${global.currentUserId}';
+                                              print(
+                                                  'isread index- $index - ${messageList[index].isRead}');
+                                              return messageList[index]
+                                                          .isEndMessage ==
+                                                      true
+                                                  ? Container(
+                                                      color:
+                                                          const Color.fromARGB(
+                                                              255,
+                                                              247,
+                                                              244,
+                                                              211),
+                                                      margin:
+                                                          const EdgeInsets.only(
+                                                              bottom: 10),
+                                                      padding:
+                                                          const EdgeInsets.all(
+                                                              8),
+                                                      alignment:
+                                                          Alignment.center,
+                                                      child: Text(
+                                                        messageList[index]
+                                                            .message!,
+                                                        style: const TextStyle(
+                                                          color: Colors.grey,
                                                         ),
+                                                        textAlign:
+                                                            TextAlign.center,
                                                       ),
-                                                      padding: const EdgeInsets
-                                                          .symmetric(
-                                                          vertical: 10,
-                                                          horizontal: 16),
-                                                      margin: const EdgeInsets
-                                                          .symmetric(
-                                                          vertical: 16,
-                                                          horizontal: 8),
-                                                      child: Column(
-                                                        crossAxisAlignment:
-                                                            chatController.isMe
-                                                                ? CrossAxisAlignment
-                                                                    .end
-                                                                : CrossAxisAlignment
-                                                                    .start,
-                                                        children: [
-                                                          GetBuilder<
-                                                              ChatController>(
-                                                            builder:
-                                                                (ccontroller) =>
-                                                                    SwipeTo(
-                                                              key: UniqueKey(),
-                                                              iconOnLeftSwipe: Icons
-                                                                  .arrow_forward,
-                                                              iconOnRightSwipe:
-                                                                  Icons.reply,
-                                                              onRightSwipe:
-                                                                  (details) {
-                                                                dev.log(
-                                                                    "\n Left Swipe Data --> $details");
-                                                                sendtextfocusnode
-                                                                    .requestFocus();
-                                                                ccontroller
-                                                                        .replymessage =
-                                                                    messageList[
-                                                                        index];
-                                                                ccontroller
-                                                                    .update();
-                                                                dev.log(
-                                                                    " Swipe details --> ${ccontroller.replymessage!.toJson()}");
-                                                              },
-                                                              swipeSensitivity:
-                                                                  5,
-                                                              child: messageList[index]
-                                                                              .replymsg !=
-                                                                          null &&
-                                                                      messageList[index]
-                                                                              .replymsg !=
-                                                                          ""
-                                                                  ? Column(
-                                                                      crossAxisAlignment:
-                                                                          CrossAxisAlignment
-                                                                              .start,
-                                                                      mainAxisAlignment:
-                                                                          MainAxisAlignment
-                                                                              .start,
-                                                                      children: [
-                                                                        IntrinsicHeight(
-                                                                          child:
-                                                                              Row(
-                                                                            mainAxisAlignment:
-                                                                                MainAxisAlignment.start,
-                                                                            children: [
-                                                                              Container(
-                                                                                color: Colors.green,
-                                                                                width: 1.w,
-                                                                              ),
-                                                                              SizedBox(width: 3.w),
-                                                                              messageList[index].replymsg != null && messageList[index].replymsg!.contains('.png') || messageList[index].replymsg != null && messageList[index].replymsg!.contains('.jpg') || messageList[index].replymsg != null && messageList[index].replymsg!.contains('.jpeg')
-                                                                                  ? Column(
-                                                                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                                                                      children: [
-                                                                                        CachedNetworkImage(
-                                                                                          height: 10.h,
-                                                                                          width: 30.w,
-                                                                                          imageUrl: messageList[index].replymsg!,
-                                                                                          imageBuilder: (context, imageProvider) => Image.network(
-                                                                                            messageList[index].replymsg!,
-                                                                                            width: MediaQuery.of(context).size.width,
-                                                                                            fit: BoxFit.fill,
-                                                                                          ),
-                                                                                          placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
-                                                                                          errorWidget: (context, url, error) => Image.asset(
-                                                                                            'assets/images/close.png',
-                                                                                            height: 10.h,
-                                                                                            width: 30.w,
-                                                                                            fit: BoxFit.fill,
-                                                                                          ),
-                                                                                        ),
-                                                                                        Text(DateFormat().add_jm().format(messageList[index].createdAt!),
-                                                                                            style: const TextStyle(
-                                                                                              color: Colors.grey,
-                                                                                              fontSize: 9.5,
-                                                                                            )),
-                                                                                      ],
-                                                                                    )
-                                                                                  : messageList[index].replymsg!.contains('.pdf')
-                                                                                      ? SizedBox(
-                                                                                          height: 9.h,
-                                                                                          width: 9.h,
-                                                                                          child: const Image(image: AssetImage('assets/images/pdf.png')),
-                                                                                        )
-                                                                                      : messageList[index].replymsg != "" || messageList[index].replymsg != null
-                                                                                          ? SizedBox(
-                                                                                              width: 70.w,
-                                                                                              child: Text(
-                                                                                                '${messageList[index].replymsg}',
-                                                                                                style: TextStyle(
-                                                                                                  color: Colors.grey,
-                                                                                                  fontSize: 12.sp,
-                                                                                                ),
-                                                                                              ))
-                                                                                          : SizedBox(
-                                                                                              width: 70.w,
-                                                                                              child: Text(
-                                                                                                '${messageList[index].message}',
-                                                                                                style: TextStyle(
-                                                                                                  color: Colors.grey,
-                                                                                                  fontSize: 12.sp,
-                                                                                                ),
-                                                                                              ),
-                                                                                            ),
-                                                                            ],
-                                                                          ),
-                                                                        ),
-                                                                        SizedBox(
-                                                                          width:
-                                                                              70.w,
-                                                                          child:
-                                                                              Text(
-                                                                            '${messageList[index].message}',
-                                                                            style:
-                                                                                TextStyle(color: Colors.black, fontSize: 12.sp),
-                                                                          ),
-                                                                        ),
-                                                                      ],
-                                                                    )
-                                                                  : messageList[index]
-                                                                              .attachementPath !=
-                                                                          ""
-                                                                      ? _isVoiceMessage(messageList[index])
-                                                                          ? _buildVoiceMessageBubble(messageList[index])
-                                                                          : messageList[index]
-                                                                                  .attachementPath!
-                                                                                  .toLowerCase()
-                                                                                  .contains('.pdf')
-                                                                          ? InkWell(
-                                                                              onTap: () {
-                                                                                debugPrint('pdf onclicked');
-                                                                                Get.to(() => PdfViewerPage(url: messageList[index].attachementPath!));
-                                                                              },
-                                                                              child: SizedBox(
-                                                                                height: 9.h,
-                                                                                width: 9.h,
-                                                                                child: const Image(image: AssetImage('assets/images/pdf.png')),
-                                                                              ),
-                                                                            )
-                                                                          : messageList[index].attachementPath!.toLowerCase().contains('.png') || messageList[index].attachementPath!.toLowerCase().contains('.jpg') || messageList[index].attachementPath!.toLowerCase().contains('.jpeg')
-                                                                              ? InkWell(
-                                                                                  onTap: () {
-                                                                                    Get.to(() => zoomImageWidget(url: messageList[index].attachementPath!));
-                                                                                  },
-                                                                                  child: Column(
-                                                                                    children: [
-                                                                                      CachedNetworkImage(
-                                                                                        height: 10.h,
-                                                                                        width: 30.w,
-                                                                                        imageUrl: messageList[index].attachementPath!,
-                                                                                        imageBuilder: (context, imageProvider) => Image.network(
-                                                                                          messageList[index].attachementPath!,
-                                                                                          width: MediaQuery.of(context).size.width,
-                                                                                          fit: BoxFit.fill,
-                                                                                        ),
-                                                                                        placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
-                                                                                        errorWidget: (context, url, error) => Image.asset(
-                                                                                          'assets/images/close.png',
-                                                                                          height: 10.h,
-                                                                                          width: 30.w,
-                                                                                          fit: BoxFit.fill,
-                                                                                        ),
-                                                                                      ),
-                                                                                    ],
-                                                                                  ),
-                                                                                )
-                                                                              : const SizedBox(
-                                                                                  child: Icon(Icons.not_interested_outlined),
-                                                                                )
-                                                                      : Container(
-                                                                          constraints:
-                                                                              BoxConstraints(maxWidth: Get.width - 100),
-                                                                          child:
-                                                                              Text(
-                                                                            messageList[index].message!,
-                                                                            style:
-                                                                                TextStyle(
-                                                                              color: chatController.isMe ? Colors.black : Colors.black,
-                                                                            ),
-                                                                            textAlign: chatController.isMe
-                                                                                ? TextAlign.start
-                                                                                : TextAlign.start,
-                                                                          ),
-                                                                        ),
+                                                    )
+                                                  : Row(
+                                                      mainAxisAlignment:
+                                                          chatController.isMe
+                                                              ? MainAxisAlignment
+                                                                  .end
+                                                              : MainAxisAlignment
+                                                                  .start,
+                                                      crossAxisAlignment:
+                                                          chatController.isMe
+                                                              ? CrossAxisAlignment
+                                                                  .end
+                                                              : CrossAxisAlignment
+                                                                  .start,
+                                                      children: [
+                                                        Container(
+                                                          decoration:
+                                                              BoxDecoration(
+                                                            color: chatController
+                                                                    .isMe
+                                                                ? messageList[index]
+                                                                            .attachementPath ==
+                                                                        ""
+                                                                    ? const Color
+                                                                        .fromARGB(
+                                                                        255,
+                                                                        247,
+                                                                        244,
+                                                                        211)
+                                                                    : Colors
+                                                                        .white
+                                                                : messageList[index]
+                                                                            .attachementPath ==
+                                                                        ""
+                                                                    ? Colors
+                                                                        .grey
+                                                                        .shade100
+                                                                    : Colors
+                                                                        .white,
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .only(
+                                                              topLeft:
+                                                                  const Radius
+                                                                      .circular(
+                                                                      12),
+                                                              topRight:
+                                                                  const Radius
+                                                                      .circular(
+                                                                      12),
+                                                              bottomLeft: chatController
+                                                                      .isMe
+                                                                  ? const Radius
+                                                                      .circular(
+                                                                      0)
+                                                                  : const Radius
+                                                                      .circular(
+                                                                      12),
+                                                              bottomRight: chatController
+                                                                      .isMe
+                                                                  ? const Radius
+                                                                      .circular(
+                                                                      0)
+                                                                  : const Radius
+                                                                      .circular(
+                                                                      12),
                                                             ),
                                                           ),
-                                                          messageList[index]
-                                                                      .createdAt !=
-                                                                  null
-                                                              ? Row(
-                                                                  mainAxisAlignment:
-                                                                      MainAxisAlignment
-                                                                          .end,
-                                                                  children: [
-                                                                    Text(
-                                                                        DateFormat()
-                                                                            .add_jm()
-                                                                            .format(messageList[index]
+                                                          padding:
+                                                              const EdgeInsets
+                                                                  .symmetric(
+                                                                  vertical: 10,
+                                                                  horizontal:
+                                                                      16),
+                                                          margin:
+                                                              const EdgeInsets
+                                                                  .symmetric(
+                                                                  vertical: 16,
+                                                                  horizontal:
+                                                                      8),
+                                                          child: Column(
+                                                            crossAxisAlignment:
+                                                                chatController
+                                                                        .isMe
+                                                                    ? CrossAxisAlignment
+                                                                        .end
+                                                                    : CrossAxisAlignment
+                                                                        .start,
+                                                            children: [
+                                                              GetBuilder<
+                                                                  ChatController>(
+                                                                builder:
+                                                                    (ccontroller) =>
+                                                                        SwipeTo(
+                                                                  key:
+                                                                      UniqueKey(),
+                                                                  iconOnLeftSwipe:
+                                                                      Icons
+                                                                          .arrow_forward,
+                                                                  iconOnRightSwipe:
+                                                                      Icons
+                                                                          .reply,
+                                                                  onRightSwipe:
+                                                                      (details) {
+                                                                    dev.log(
+                                                                        "\n Left Swipe Data --> $details");
+                                                                    sendtextfocusnode
+                                                                        .requestFocus();
+                                                                    ccontroller
+                                                                            .replymessage =
+                                                                        messageList[
+                                                                            index];
+                                                                    ccontroller
+                                                                        .update();
+                                                                    dev.log(
+                                                                        " Swipe details --> ${ccontroller.replymessage!.toJson()}");
+                                                                  },
+                                                                  swipeSensitivity:
+                                                                      5,
+                                                                  child: messageList[index].replymsg !=
+                                                                              null &&
+                                                                          messageList[index].replymsg !=
+                                                                              ""
+                                                                      ? Column(
+                                                                          crossAxisAlignment:
+                                                                              CrossAxisAlignment.start,
+                                                                          mainAxisAlignment:
+                                                                              MainAxisAlignment.start,
+                                                                          children: [
+                                                                            IntrinsicHeight(
+                                                                              child: Row(
+                                                                                mainAxisAlignment: MainAxisAlignment.start,
+                                                                                children: [
+                                                                                  Container(
+                                                                                    color: Colors.green,
+                                                                                    width: 1.w,
+                                                                                  ),
+                                                                                  SizedBox(width: 3.w),
+                                                                                  messageList[index].replymsg != null && messageList[index].replymsg!.contains('.png') || messageList[index].replymsg != null && messageList[index].replymsg!.contains('.jpg') || messageList[index].replymsg != null && messageList[index].replymsg!.contains('.jpeg')
+                                                                                      ? Column(
+                                                                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                                                                          children: [
+                                                                                            CachedNetworkImage(
+                                                                                              height: 10.h,
+                                                                                              width: 30.w,
+                                                                                              imageUrl: messageList[index].replymsg!,
+                                                                                              imageBuilder: (context, imageProvider) => Image.network(
+                                                                                                messageList[index].replymsg!,
+                                                                                                width: MediaQuery.of(context).size.width,
+                                                                                                fit: BoxFit.fill,
+                                                                                              ),
+                                                                                              placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
+                                                                                              errorWidget: (context, url, error) => Image.asset(
+                                                                                                'assets/images/close.png',
+                                                                                                height: 10.h,
+                                                                                                width: 30.w,
+                                                                                                fit: BoxFit.fill,
+                                                                                              ),
+                                                                                            ),
+                                                                                            Text(DateFormat().add_jm().format(messageList[index].createdAt!),
+                                                                                                style: const TextStyle(
+                                                                                                  color: Colors.grey,
+                                                                                                  fontSize: 9.5,
+                                                                                                )),
+                                                                                          ],
+                                                                                        )
+                                                                                      : messageList[index].replymsg!.contains('.pdf')
+                                                                                          ? SizedBox(
+                                                                                              height: 9.h,
+                                                                                              width: 9.h,
+                                                                                              child: const Image(image: AssetImage('assets/images/pdf.png')),
+                                                                                            )
+                                                                                          : messageList[index].replymsg != "" || messageList[index].replymsg != null
+                                                                                              ? SizedBox(
+                                                                                                  width: 70.w,
+                                                                                                  child: Text(
+                                                                                                    '${messageList[index].replymsg}',
+                                                                                                    style: TextStyle(
+                                                                                                      color: Colors.grey,
+                                                                                                      fontSize: 12.sp,
+                                                                                                    ),
+                                                                                                  ))
+                                                                                              : SizedBox(
+                                                                                                  width: 70.w,
+                                                                                                  child: Text(
+                                                                                                    '${messageList[index].message}',
+                                                                                                    style: TextStyle(
+                                                                                                      color: Colors.grey,
+                                                                                                      fontSize: 12.sp,
+                                                                                                    ),
+                                                                                                  ),
+                                                                                                ),
+                                                                                ],
+                                                                              ),
+                                                                            ),
+                                                                            SizedBox(
+                                                                              width: 70.w,
+                                                                              child: Text(
+                                                                                '${messageList[index].message}',
+                                                                                style: TextStyle(color: Colors.black, fontSize: 12.sp),
+                                                                              ),
+                                                                            ),
+                                                                          ],
+                                                                        )
+                                                                      : messageList[index].attachementPath !=
+                                                                              ""
+                                                                          ? _isVoiceMessage(messageList[index])
+                                                                              ? _buildVoiceMessageBubble(messageList[index])
+                                                                              : messageList[index].attachementPath!.toLowerCase().contains('.pdf')
+                                                                                  ? InkWell(
+                                                                                      onTap: () {
+                                                                                        debugPrint('pdf onclicked');
+                                                                                        Get.to(() => PdfViewerPage(url: messageList[index].attachementPath!));
+                                                                                      },
+                                                                                      child: SizedBox(
+                                                                                        height: 9.h,
+                                                                                        width: 9.h,
+                                                                                        child: const Image(image: AssetImage('assets/images/pdf.png')),
+                                                                                      ),
+                                                                                    )
+                                                                                  : messageList[index].attachementPath!.toLowerCase().contains('.png') || messageList[index].attachementPath!.toLowerCase().contains('.jpg') || messageList[index].attachementPath!.toLowerCase().contains('.jpeg')
+                                                                                      ? InkWell(
+                                                                                          onTap: () {
+                                                                                            Get.to(() => zoomImageWidget(url: messageList[index].attachementPath!));
+                                                                                          },
+                                                                                          child: Column(
+                                                                                            children: [
+                                                                                              CachedNetworkImage(
+                                                                                                height: 10.h,
+                                                                                                width: 30.w,
+                                                                                                imageUrl: messageList[index].attachementPath!,
+                                                                                                imageBuilder: (context, imageProvider) => Image.network(
+                                                                                                  messageList[index].attachementPath!,
+                                                                                                  width: MediaQuery.of(context).size.width,
+                                                                                                  fit: BoxFit.fill,
+                                                                                                ),
+                                                                                                placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
+                                                                                                errorWidget: (context, url, error) => Image.asset(
+                                                                                                  'assets/images/close.png',
+                                                                                                  height: 10.h,
+                                                                                                  width: 30.w,
+                                                                                                  fit: BoxFit.fill,
+                                                                                                ),
+                                                                                              ),
+                                                                                            ],
+                                                                                          ),
+                                                                                        )
+                                                                                      : const SizedBox(
+                                                                                          child: Icon(Icons.not_interested_outlined),
+                                                                                        )
+                                                                          : Container(
+                                                                              constraints: BoxConstraints(maxWidth: Get.width - 100),
+                                                                              child: Text(
+                                                                                messageList[index].message!,
+                                                                                style: TextStyle(
+                                                                                  color: chatController.isMe ? Colors.black : Colors.black,
+                                                                                ),
+                                                                                textAlign: chatController.isMe ? TextAlign.start : TextAlign.start,
+                                                                              ),
+                                                                            ),
+                                                                ),
+                                                              ),
+                                                              messageList[index]
+                                                                          .createdAt !=
+                                                                      null
+                                                                  ? Row(
+                                                                      mainAxisAlignment:
+                                                                          MainAxisAlignment
+                                                                              .end,
+                                                                      children: [
+                                                                        Text(
+                                                                            DateFormat().add_jm().format(messageList[index]
                                                                                 .createdAt!),
-                                                                        style:
-                                                                            const TextStyle(
-                                                                          color:
-                                                                              Colors.grey,
-                                                                          fontSize:
-                                                                              9.5,
-                                                                        )),
-                                                                    Icon(
-                                                                      chatController
-                                                                              .isMe
-                                                                          ? messageList[index].isRead == true
-                                                                              ? Icons.done_all
-                                                                              : Icons.done
-                                                                          : null,
-                                                                      color: messageList[index].isRead ==
-                                                                              true
-                                                                          ? Colors
-                                                                              .blue
-                                                                          : Colors
-                                                                              .grey,
-                                                                      size: 15,
+                                                                            style:
+                                                                                const TextStyle(
+                                                                              color: Colors.grey,
+                                                                              fontSize: 9.5,
+                                                                            )),
+                                                                        Icon(
+                                                                          chatController.isMe
+                                                                              ? messageList[index].isRead == true
+                                                                                  ? Icons.done_all
+                                                                                  : Icons.done
+                                                                              : null,
+                                                                          color: messageList[index].isRead == true
+                                                                              ? Colors.blue
+                                                                              : Colors.grey,
+                                                                          size:
+                                                                              15,
+                                                                        )
+                                                                      ],
                                                                     )
-                                                                  ],
-                                                                )
-                                                              : const SizedBox()
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ],
-                                                );
-                                        });
-                                  }
-                                }),
+                                                                  : const SizedBox()
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    );
+                                            });
+                                      }
+                                    }),
                           ),
                         ],
                       );
@@ -1216,8 +1241,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                     (ccontroller.replymessage?.message
                                                     ?.isNotEmpty ==
                                                 true ||
-                                            ccontroller.replymessage
-                                                    ?.attachementPath?.isNotEmpty ==
+                                            ccontroller
+                                                    .replymessage
+                                                    ?.attachementPath
+                                                    ?.isNotEmpty ==
                                                 true)
                                         ? _replywidget()
                                         : const SizedBox.shrink(),
@@ -1235,23 +1262,29 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                           children: [
                                             Expanded(
                                               child: Opacity(
-                                                opacity: isUserJoined ? 1.0 : 0.5,
+                                                opacity:
+                                                    isUserJoined ? 1.0 : 0.5,
                                                 child: Container(
                                                   decoration: BoxDecoration(
                                                       color: isUserJoined
                                                           ? Colors.white
-                                                          : Colors.grey.shade300,
+                                                          : Colors
+                                                              .grey.shade300,
                                                       borderRadius:
                                                           BorderRadius.only(
                                                         bottomLeft:
-                                                            Radius.circular(2.w),
+                                                            Radius.circular(
+                                                                2.w),
                                                         bottomRight:
-                                                            Radius.circular(2.w),
+                                                            Radius.circular(
+                                                                2.w),
                                                       )),
                                                   // height: 7.h,
                                                   child: TextFormField(
-                                                    focusNode: sendtextfocusnode,
-                                                    controller: messageController,
+                                                    focusNode:
+                                                        sendtextfocusnode,
+                                                    controller:
+                                                        messageController,
                                                     maxLines: 6,
                                                     minLines: 1,
                                                     enabled: isUserJoined,
@@ -1282,8 +1315,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                                         ),
                                                         borderSide:
                                                             const BorderSide(
-                                                                color:
-                                                                    Colors.grey),
+                                                                color: Colors
+                                                                    .grey),
                                                       ),
                                                       enabledBorder:
                                                           OutlineInputBorder(
@@ -1292,14 +1325,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                                                 bottomLeft: Radius
                                                                     .circular(
                                                                         2.w),
-                                                                bottomRight:
-                                                                    Radius
-                                                                        .circular(
-                                                                            2.w)),
+                                                                bottomRight: Radius
+                                                                    .circular(
+                                                                        2.w)),
                                                         borderSide:
                                                             const BorderSide(
-                                                                color:
-                                                                    Colors.grey),
+                                                                color: Colors
+                                                                    .grey),
                                                       ),
                                                       disabledBorder:
                                                           OutlineInputBorder(
@@ -1308,10 +1340,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                                                 bottomLeft: Radius
                                                                     .circular(
                                                                         2.w),
-                                                                bottomRight:
-                                                                    Radius
-                                                                        .circular(
-                                                                            2.w)),
+                                                                bottomRight: Radius
+                                                                    .circular(
+                                                                        2.w)),
                                                         borderSide: BorderSide(
                                                             color: Colors
                                                                 .grey.shade400),
@@ -1392,9 +1423,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                               ),
                                             ),
                                             Padding(
-                                              padding: const EdgeInsets.only(left: 3.0),
+                                              padding: const EdgeInsets.only(
+                                                  left: 3.0),
                                               child: Container(
-                                                margin: EdgeInsets.only(bottom: 1.h),
+                                                margin: EdgeInsets.only(
+                                                    bottom: 1.h),
                                                 height: 6.h,
                                                 width: 6.h,
                                                 decoration: BoxDecoration(
@@ -1402,14 +1435,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                                       ? Colors.grey.shade700
                                                       : Colors.grey.shade400,
                                                   shape: BoxShape.circle,
-                                                  border: Border.all(color: Colors.grey),
+                                                  border: Border.all(
+                                                      color: Colors.grey),
                                                 ),
                                                 child: InkWell(
                                                   onTap: isUserJoined
                                                       ? _startVoiceRecording
                                                       : null,
                                                   child: Padding(
-                                                    padding: EdgeInsets.only(left: 5.0),
+                                                    padding: EdgeInsets.only(
+                                                        left: 5.0),
                                                     child: Icon(
                                                       Icons.mic_rounded,
                                                       size: 18.sp,
@@ -1459,7 +1494,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                                                       .addBlockKeywordInList(
                                                                           messageController
                                                                               .text);
-                                                              String filtertext =
+                                                              String
+                                                                  filtertext =
                                                                   chatController
                                                                       .filterBlockedWordsForSending(
                                                                           refinedMessage);
@@ -1468,14 +1504,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                                                   .tempBlockedKeywords
                                                                   .isNotEmpty) {
                                                                 // log('tempBlockedKeywords is not empty try to send to api for store');
-                                                                await chatController
-                                                                    .storedefaultmessage(
-                                                                        messageController
-                                                                            .text,
-                                                                        widget
-                                                                            .astrouserID,
-                                                                        widget
-                                                                            .customerId);
+                                                                await chatController.storedefaultmessage(
+                                                                    messageController
+                                                                        .text,
+                                                                    widget
+                                                                        .astrouserID,
+                                                                    widget
+                                                                        .customerId);
                                                               } else {
                                                                 //
                                                                 log('no blocked content go ahead');
@@ -1506,7 +1541,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                                                   widget
                                                                       .customerId,
                                                                   false,
-                                                                  ccontroller.replymessage!.attachementPath?.isNotEmpty ==
+                                                                  ccontroller
+                                                                              .replymessage!
+                                                                              .attachementPath
+                                                                              ?.isNotEmpty ==
                                                                           true
                                                                       ? ccontroller
                                                                           .replymessage!
@@ -1520,13 +1558,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                                                   .text
                                                                   .isNotEmpty) {
                                                                 // Send normal message
-                                                                chatController
-                                                                    .sendMessage(
-                                                                        filtertext,
-                                                                        widget
-                                                                            .customerId,
-                                                                        false,
-                                                                        "normalMessage");
+                                                                chatController.sendMessage(
+                                                                    filtertext,
+                                                                    widget
+                                                                        .customerId,
+                                                                    false,
+                                                                    "normalMessage");
                                                               }
 
                                                               // Clear input and reply field
@@ -1730,6 +1767,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     chatController.update();
     if (widget.flagId == 1) {
       global.inChatscreen(false);
+      chatController.setOnlineStatus(
+          false, widget.fireBasechatId.toString(), '${global.currentUserId}',
+          extiform: "from chat_screen backpress");
       global.sendNotification(
           title: "Astro left chat", fcmToken: widget.fcmToken);
       chatController.sendMessage('${global.user.name} -> ended chat',
@@ -1827,8 +1867,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           );
         },
       );
-    
-    
     }
   }
 }

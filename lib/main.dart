@@ -106,7 +106,7 @@ Future<void> handleBackgroundMessage(RemoteMessage message) async {
             }
 
             if (shouldShowCallKit) {
-              CallUtils.showIncomingChat(messageData);
+              await CallUtils.showIncomingChat(messageData);
             }
             initforbackground();
 
@@ -299,9 +299,25 @@ class _MyAppState extends State<MyApp> {
   final callitmercontroller = Get.put(CalltimerController());
   final customersupportController = Get.put(AstrologerSupportController());
 
+  Future<void> _clearStuckCalls() async {
+    final activeCalls = await FlutterCallkitIncoming.activeCalls();
+    if (activeCalls == null || activeCalls.isEmpty) return;
+    debugPrint('Active calls on startup: ${activeCalls.length}');
+    for (final call in activeCalls) {
+      final isAccepted = call['isAccepted'] == true;
+      if (!isAccepted) {
+        final id = call['id'];
+        debugPrint('Ending stuck call: $id');
+        await FlutterCallkitIncoming.endCall(id);
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+
+    _clearStuckCalls();
 
     OneSignal.Notifications.addPermissionObserver((state) {
       log("Has permission $state");
@@ -320,17 +336,19 @@ class _MyAppState extends State<MyApp> {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
       print('notification onMessage foreground ->  $message');
       if (message.data['title'] == ConstantsKeys.StartSimpleChatTimer) {
-        global.isChatTimerStarted = true;
-        chatitmercontroller.newIsStartTimer = true;
-        chatitmercontroller.update();
         Map<String, dynamic> notibody = jsonDecode(message.data['body']);
-        debugPrint('newDuration notibody $notibody');
+        debugPrint('StartSimpleChatTimer notibody $notibody');
 
-        if (notibody.containsKey('timeInInt')) {
+        if (notibody.containsKey('timeInInt') && chatitmercontroller.isTimerStarted) {
           int newDuration = int.parse(notibody['timeInInt'].toString());
-          chatitmercontroller.restartTimer(newDuration);
+          int currentDurationSec = chatitmercontroller.totalDuration ~/ 1000;
+          if (newDuration != currentDurationSec) {
+            chatitmercontroller.restartTimer(newDuration);
+            debugPrint('StartSimpleChatTimer: extended from ${currentDurationSec}s to ${newDuration}s');
+          }
+          chatitmercontroller.update();
         } else {
-          log('time set to true but update timer is not found in else block');
+          debugPrint('StartSimpleChatTimer: timer not started yet, Firebase stream will handle it');
         }
       } else if (message.data['title'] == ConstantsKeys.callrejectedcustomer) {
         log('is in callscren or not ${global.isinAcceptCallscreen}');

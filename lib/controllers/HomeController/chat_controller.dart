@@ -553,6 +553,8 @@ class ChatController extends GetxController {
         log('sending id is $chatId');
         log('sending id firebase ${global.currentUserId}_$customerId');
         chattimercontroller.newIsStartTimer = false;
+        customerEndedChatFCM.value = false;
+        chatLeft = false;
         print(
             "chattimercontroller.newIsStartTimer:- ${chattimercontroller.newIsStartTimer}");
         global.chatStartedAt = null;
