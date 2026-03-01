@@ -77,40 +77,15 @@ Future<void> handleBackgroundMessage(RemoteMessage message) async {
       if (messageData['notificationType'] != null) {
         switch (messageData['notificationType']) {
           case 2:
-            // in background
             print('calling from :- 2');
             CallUtils.showIncomingCall(messageData);
             initforbackground();
-
             break;
           case 8:
-            print('inside background noti type 8 - showing CallKit chat notification');
-
-            final incomingChatId = messageData['chatId'];
-
-            // Synchronous duplicate check only — no await before showIncomingChat
-            // so it fires at exactly the same point as showIncomingCall does for calls.
-            // Any await before the platform channel call yields the isolate's event loop
-            // and prevents the CallKit activity from launching (calls work because they
-            // have zero awaits before showIncomingCall).
-            bool shouldShowCallKit = true;
-            try {
-              final chatController = Get.find<ChatController>();
-              if (incomingChatId != null &&
-                  chatController.acceptedChatIds.contains(incomingChatId)) {
-                log('Chat $incomingChatId already accepted, skipping CallKit in background');
-                shouldShowCallKit = false;
-              }
-            } catch (e) {
-              log('Could not check acceptedChatIds in background: $e');
-            }
-
-            if (shouldShowCallKit) {
-              await CallUtils.showIncomingChat(messageData);
-            }
+            print(
+                'inside background noti type 8 - showing CallKit chat notification');
+            CallUtils.showIncomingChat(messageData);
             initforbackground();
-
-            // Update prefs asynchronously after the show call — do NOT await before it
             SharedPreferences.getInstance().then((prefs) {
               prefs.setBool(ConstantsKeys.ISCHATAVILABLE, true);
             });
@@ -153,7 +128,7 @@ void initforbackground() async {
         print('actionCallAccept incoming in background');
         final prefs = await SharedPreferences.getInstance();
         final notificationType = event.body['extra']["notificationType"];
-        
+
         // SET new values
         String extraDataJson = jsonEncode(event.body['extra']);
         await Future.wait([
@@ -172,7 +147,7 @@ void initforbackground() async {
         final chatController = Get.put(ChatController());
         final prefs = await SharedPreferences.getInstance();
         final notificationTypeDecline = event.body['extra']["notificationType"];
-        
+
         await Future.wait([
           prefs.setBool(ConstantsKeys.ISREJECTED, true),
           prefs.setBool(ConstantsKeys.ISACCEPTED, false),
@@ -301,14 +276,13 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _clearStuckCalls() async {
     final activeCalls = await FlutterCallkitIncoming.activeCalls();
-    if (activeCalls == null || activeCalls.isEmpty) return;
-    debugPrint('Active calls on startup: ${activeCalls.length}');
-    for (final call in activeCalls) {
-      final isAccepted = call['isAccepted'] == true;
-      if (!isAccepted) {
-        final id = call['id'];
-        debugPrint('Ending stuck call: $id');
-        await FlutterCallkitIncoming.endCall(id);
+    if (activeCalls != null && activeCalls.isNotEmpty) {
+      debugPrint('Active calls on startup: ${activeCalls.length}');
+      for (final call in activeCalls) {
+        if (call['isAccepted'] != true) {
+          debugPrint('Ending stuck call: ${call['id']}');
+          await FlutterCallkitIncoming.endCall(call['id']);
+        }
       }
     }
   }
@@ -339,16 +313,19 @@ class _MyAppState extends State<MyApp> {
         Map<String, dynamic> notibody = jsonDecode(message.data['body']);
         debugPrint('StartSimpleChatTimer notibody $notibody');
 
-        if (notibody.containsKey('timeInInt') && chatitmercontroller.isTimerStarted) {
+        if (notibody.containsKey('timeInInt') &&
+            chatitmercontroller.isTimerStarted) {
           int newDuration = int.parse(notibody['timeInInt'].toString());
           int currentDurationSec = chatitmercontroller.totalDuration ~/ 1000;
           if (newDuration != currentDurationSec) {
             chatitmercontroller.restartTimer(newDuration);
-            debugPrint('StartSimpleChatTimer: extended from ${currentDurationSec}s to ${newDuration}s');
+            debugPrint(
+                'StartSimpleChatTimer: extended from ${currentDurationSec}s to ${newDuration}s');
           }
           chatitmercontroller.update();
         } else {
-          debugPrint('StartSimpleChatTimer: timer not started yet, Firebase stream will handle it');
+          debugPrint(
+              'StartSimpleChatTimer: timer not started yet, Firebase stream will handle it');
         }
       } else if (message.data['title'] == ConstantsKeys.callrejectedcustomer) {
         log('is in callscren or not ${global.isinAcceptCallscreen}');
@@ -400,53 +377,55 @@ class _MyAppState extends State<MyApp> {
           if (messageData['notificationType'] != null) {
             switch (messageData['notificationType']) {
               case 8:
-                if(message.data['title']!="Chat Timer Started")
-                  {
-                    final incomingChatId = messageData['chatId'];
-                    final userName = messageData['userName'] ?? 'User';
-                    bool shouldShowCallKit = true;
-                    log('incomingChatId $incomingChatId');
-                    log('userName $userName');
-                    // Check if chat is already in progress to prevent showing CallKit again
-                    if (chatController.isInChatScreen) {
-                      log('Chat already in progress, showing simple notification instead of CallKit');
-                      _showSimpleChatNotification(userName, 'Chat request update');
+                if (message.data['title'] != "Chat Timer Started") {
+                  final incomingChatId = messageData['chatId'];
+                  final userName = messageData['userName'] ?? 'User';
+                  bool shouldShowCallKit = true;
+                  log('incomingChatId $incomingChatId');
+                  log('userName $userName');
+                  // Check if chat is already in progress to prevent showing CallKit again
+                  if (chatController.isInChatScreen) {
+                    log('Chat already in progress, showing simple notification instead of CallKit');
+                    _showSimpleChatNotification(
+                        userName, 'Chat request update');
+                    shouldShowCallKit = false;
+                  }
+
+                  // Check if this chatId was already accepted
+                  if (incomingChatId != null && shouldShowCallKit) {
+                    // Check if chatId is in the accepted set
+                    if (chatController.acceptedChatIds
+                        .contains(incomingChatId)) {
+                      log('Chat $incomingChatId already accepted, showing simple notification instead of CallKit');
+                      _showSimpleChatNotification(
+                          userName, 'Chat request update');
                       shouldShowCallKit = false;
                     }
-                    
-                    // Check if this chatId was already accepted
-                    if (incomingChatId != null && shouldShowCallKit) {
-                      // Check if chatId is in the accepted set
-                      if (chatController.acceptedChatIds.contains(incomingChatId)) {
-                        log('Chat $incomingChatId already accepted, showing simple notification instead of CallKit');
-                        _showSimpleChatNotification(userName, 'Chat request update');
+
+                    // Also check if chat is already in the chat list (meaning it was accepted)
+                    if (shouldShowCallKit) {
+                      final chatExists = chatController.chatList
+                          .any((chat) => chat.chatId == incomingChatId);
+                      if (chatExists) {
+                        log('Chat $incomingChatId already exists in list, showing simple notification instead of CallKit');
+                        // Mark it as accepted to prevent future notifications
+                        chatController.acceptedChatIds.add(incomingChatId);
+                        _showSimpleChatNotification(
+                            userName, 'Chat request update');
                         shouldShowCallKit = false;
                       }
-                      
-                      // Also check if chat is already in the chat list (meaning it was accepted)
-                      if (shouldShowCallKit) {
-                        final chatExists = chatController.chatList.any(
-                          (chat) => chat.chatId == incomingChatId
-                        );
-                        if (chatExists) {
-                          log('Chat $incomingChatId already exists in list, showing simple notification instead of CallKit');
-                          // Mark it as accepted to prevent future notifications
-                          chatController.acceptedChatIds.add(incomingChatId);
-                          _showSimpleChatNotification(userName, 'Chat request update');
-                          shouldShowCallKit = false;
-                        }
-                      }
                     }
-                    
-                    if (shouldShowCallKit) {
-                      log('inside foreground noti type 8 - showing CallKit notification for chatId: $incomingChatId');
-                      // Show incoming chat notification with accept/reject buttons (same as call)
-                      CallUtils.showIncomingChat(messageData);
-                    }
-                    
-                    await chatController.getChatList(true, isLoading: 0);
-                    chatController.update();
                   }
+
+                  if (shouldShowCallKit) {
+                    log('inside foreground noti type 8 - showing CallKit notification for chatId: $incomingChatId');
+                    // Show incoming chat notification with accept/reject buttons (same as call)
+                    CallUtils.showIncomingChat(messageData);
+                  }
+
+                  await chatController.getChatList(true, isLoading: 0);
+                  chatController.update();
+                }
                 break;
               case 2:
                 if (message.data['title'] == ConstantsKeys.startCalltimer) {
@@ -660,7 +639,8 @@ class _MyAppState extends State<MyApp> {
           final prefs = await SharedPreferences.getInstance();
           final notificationType = event.body['extra']["notificationType"];
 
-          print('actionCallAccept incoming - notificationType: $notificationType');
+          print(
+              'actionCallAccept incoming - notificationType: $notificationType');
           await prefs.setBool(ConstantsKeys.ISACCEPTED, false);
           await prefs.setString(ConstantsKeys.ISACCEPTEDDATA, '');
           await prefs.commit();
@@ -681,7 +661,8 @@ class _MyAppState extends State<MyApp> {
           final prefs = await SharedPreferences.getInstance();
           await prefs.reload(); // <-- IMPORTANT: force reload from disk
 
-          final notificationTypeDecline = event.body['extra']["notificationType"];
+          final notificationTypeDecline =
+              event.body['extra']["notificationType"];
 
           // Handle chat rejection (type 8)
           if (notificationTypeDecline == 8) {
@@ -718,7 +699,8 @@ class _MyAppState extends State<MyApp> {
           break;
 
         case Event.actionCallCallback:
-          final notificationTypeCallback = event.body['extra']["notificationType"];
+          final notificationTypeCallback =
+              event.body['extra']["notificationType"];
           if (notificationTypeCallback == 8) {
             chatAccept(event);
           } else {
@@ -822,9 +804,11 @@ class _MyAppState extends State<MyApp> {
   }
 
   // Show simple notification for chat requests that are already accepted/in progress
-  Future<void> _showSimpleChatNotification(String userName, String message) async {
+  Future<void> _showSimpleChatNotification(
+      String userName, String message) async {
     try {
-      final android = const AndroidInitializationSettings('@mipmap/ic_launcher');
+      final android =
+          const AndroidInitializationSettings('@mipmap/ic_launcher');
       final initializationSettingsDarwin = DarwinInitializationSettings(
         defaultPresentBadge: true,
         requestSoundPermission: true,

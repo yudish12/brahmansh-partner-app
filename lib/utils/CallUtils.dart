@@ -50,21 +50,19 @@ class CallUtils {
         'fcmToken': body['fcmToken'],
         'call_duration': body['call_duration'].toString(),
         'call_method': body['call_method'].toString(),
-        'channel_name' : body['channel_name'],
+        'channel_name': body['channel_name'],
       },
 
       headers: <String, dynamic>{'apiKey': 'sunil@123!', 'platform': 'flutter'},
       android: const AndroidParams(
-        isCustomNotification: true,
-        isShowLogo: true,
-        isShowFullLockedScreen: true,
-
+        isCustomNotification: false,
+        isShowLogo: false,
         ringtonePath: 'system_ringtone_default',
         backgroundColor: '#0955fa',
         actionColor: '#4CAF50',
         textColor: '#ffffff',
         incomingCallNotificationChannelName: "Incoming Call 1",
-        isShowCallID: true, //for showing handle in incoming call notification
+        isShowCallID: true,
       ),
     );
 
@@ -73,59 +71,69 @@ class CallUtils {
 
   /// Show incoming chat request notification with accept/reject buttons
   static Future<void> showIncomingChat(var body) async {
-    Uuid uuid = const Uuid();
-    String currentUuid = uuid.v4();
-    String defaultImage = 'https://i.pravatar.cc/500';
-    String? profilePic = body['profile'];
-    String imageUrl = profilePic ?? defaultImage;
+    try {
+      Uuid uuid = const Uuid();
+      String currentUuid = uuid.v4();
 
-    log('showIncomingChat - userName: ${body['userName']}');
-    log('showIncomingChat - chatId: ${body['chatId']}');
-    log('showIncomingChat - userId: ${body['userId']}');
-    log('showIncomingChat - profile: $imageUrl');
+      final userName = (body['userName']?.toString() ?? '').isEmpty
+          ? 'Chat Request'
+          : body['userName'].toString();
+      final profile = body['profile']?.toString() ?? '';
+      final chatId = body['chatId'];
+      final userId = body['userId'];
+      final fcmToken = body['fcmToken']?.toString() ?? '';
+      final chatDuration = body['chat_duration']?.toString() ?? '0';
+      final subscriptionId = body['subscription_id']?.toString() ?? '';
 
-    CallKitParams callKitParams = CallKitParams(
-      id: currentUuid,
-      nameCaller: body['userName'] ?? 'New Chat Request',
-      appName: 'BrahmanshTalk',
-      handle: 'Chat Request',
-      type: 0, // Use 0 for chat appearance
-      textAccept: 'Accept',
-      textDecline: 'Decline',
-      duration: 60000, // 60 seconds timeout for chat
-      callingNotification: const NotificationParams(
-        showNotification: true,
-        isShowCallback: false,
-      ),
-      missedCallNotification: const NotificationParams(
-        showNotification: true,
-        isShowCallback: false,
-      ),
-      extra: <String, dynamic>{
-        'notificationType': 8, // Chat notification type
-        'chatId': body['chatId'],
-        'userId': body['userId'],
-        'userName': body['userName'],
-        'profile': body['profile'],
-        'fcmToken': body['fcmToken'],
-        'chat_duration': body['chat_duration']?.toString() ?? '',
-        'subscription_id': body['subscription_id'] ?? '',
-      },
-      headers: <String, dynamic>{'apiKey': 'sunil@123!', 'platform': 'flutter'},
-      android: const AndroidParams(
-        isCustomNotification: true,
-        isShowLogo: true,
-        isShowFullLockedScreen: true,
-        isImportant: true,
-        ringtonePath: 'system_ringtone_default',
-        backgroundColor: '#EA6C10',
-        actionColor: '#4CAF50',
-        textColor: '#ffffff',
-        incomingCallNotificationChannelName: "Incoming Chat Request",
-        isShowCallID: true,
-      ),
-    );
+      log('showIncomingChat - userName: $userName, chatId: $chatId, userId: $userId');
 
-    await FlutterCallkitIncoming.showCallkitIncoming(callKitParams);
+      CallKitParams callKitParams = CallKitParams(
+        id: currentUuid,
+        nameCaller: userName,
+        appName: 'BrahmanshTalk',
+        handle: 'Chat Request',
+        type: 0,
+        textAccept: 'Accept',
+        textDecline: 'Decline',
+        duration: 60000,
+        callingNotification: const NotificationParams(
+          showNotification: true,
+          isShowCallback: false,
+        ),
+        missedCallNotification: const NotificationParams(
+          showNotification: true,
+          isShowCallback: false,
+        ),
+        extra: <String, dynamic>{
+          'notificationType': 8,
+          'chatId': chatId,
+          'userId': userId,
+          'userName': userName,
+          'profile': profile,
+          'fcmToken': fcmToken,
+          'chat_duration': chatDuration,
+          'subscription_id': subscriptionId,
+        },
+        headers: <String, dynamic>{
+          'apiKey': 'sunil@123!',
+          'platform': 'flutter'
+        },
+        android: const AndroidParams(
+          isCustomNotification: false,
+          isShowLogo: false,
+          ringtonePath: 'system_ringtone_default',
+          backgroundColor: '#EA6C10',
+          actionColor: '#4CAF50',
+          textColor: '#ffffff',
+          incomingCallNotificationChannelName: "Incoming Chat Request",
+          isShowCallID: true,
+        ),
+      );
+
+      await FlutterCallkitIncoming.showCallkitIncoming(callKitParams);
+      log('showIncomingChat - CallKit notification shown successfully');
+    } catch (e) {
+      log('showIncomingChat - ERROR: $e');
+    }
   }
 }
