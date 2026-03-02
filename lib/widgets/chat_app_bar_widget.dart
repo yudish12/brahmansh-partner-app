@@ -8,7 +8,6 @@ import 'package:brahmanshtalk/controllers/HomeController/productController.dart'
 import 'package:brahmanshtalk/controllers/HomeController/timer_controller.dart';
 import 'package:brahmanshtalk/controllers/HomeController/wallet_controller.dart';
 import 'package:brahmanshtalk/services/apiHelper.dart';
-import 'package:brahmanshtalk/utils/config.dart';
 import 'package:brahmanshtalk/utils/global.dart' as global;
 import 'package:brahmanshtalk/views/HomeScreen/products/productScreen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -21,7 +20,6 @@ import '../constants/colorConst.dart';
 import '../constants/imageConst.dart';
 import '../controllers/Chattimercontroller.dart';
 import '../utils/constantskeys.dart';
-
 
 class ChatAppBar extends StatefulWidget implements PreferredSizeWidget {
   final double? height;
@@ -128,30 +126,30 @@ class _MyCustomAppBarState extends State<ChatAppBar> {
                         padding: const EdgeInsets.only(left: 10),
                         child: Text(
                           _truncateName(widget.customername),
-                          style:
-                              TextStyle(fontSize: 13.sp, color: COLORS().textColor),
+                          style: TextStyle(
+                              fontSize: 13.sp, color: COLORS().textColor),
                         ),
                       ),
-                    // Only show the countdown when the timer has actually started
-                    // (user joined). Removing `|| widget.flagid == 1` prevents the
-                    // timer from appearing before the customer joins — previously
-                    // status() was always called for flagid==1, but status() returns
-                    // SizedBox.shrink() when endTime==0, and the "waiting to join"
-                    // text was never shown because it was in the unreachable else branch.
-                    chattimercontroller.newIsStartTimer == true
-                        ? status()
-                        : widget.flagid == 2
-                            ? const SizedBox()
-                            : Container(
-                                padding: const EdgeInsets.only(left: 10),
-                                child: Text(
-                                  'waiting to join..',
-                                  style: TextStyle(
-                                      color: Colors.black,
-                                      fontWeight: FontWeight.w400,
-                                      fontSize: 12.sp),
+                      // Only show the countdown when the timer has actually started
+                      // (user joined). Removing `|| widget.flagid == 1` prevents the
+                      // timer from appearing before the customer joins — previously
+                      // status() was always called for flagid==1, but status() returns
+                      // SizedBox.shrink() when endTime==0, and the "waiting to join"
+                      // text was never shown because it was in the unreachable else branch.
+                      chattimercontroller.newIsStartTimer == true
+                          ? status()
+                          : widget.flagid == 2
+                              ? const SizedBox()
+                              : Container(
+                                  padding: const EdgeInsets.only(left: 10),
+                                  child: Text(
+                                    'waiting to join..',
+                                    style: TextStyle(
+                                        color: Colors.black,
+                                        fontWeight: FontWeight.w400,
+                                        fontSize: 12.sp),
+                                  ),
                                 ),
-                              ),
                     ],
                   );
                 }),
@@ -183,8 +181,10 @@ class _MyCustomAppBarState extends State<ChatAppBar> {
   Widget status() {
     return GetBuilder<ChattimerController>(
       builder: (chattimercontroller) {
-        print("${chattimercontroller.newIsStartTimer}");
-        print("widget.flagid :- ${widget.flagid}");
+        final now = DateTime.now().millisecondsSinceEpoch;
+        final remaining = ((chattimercontroller.endTime - now) / 1000).floor();
+        debugPrint(
+            ">>> TIMER: status() rebuild: newIsStartTimer=${chattimercontroller.newIsStartTimer}, endTime=${chattimercontroller.endTime}, remaining=${remaining}s");
         if (chattimercontroller.newIsStartTimer == true) {
           print(
               "chatStatedAt fromstatus ${global.getStorage.read('chatStartedAt')}");
@@ -196,9 +196,7 @@ class _MyCustomAppBarState extends State<ChatAppBar> {
         } else {
           print("User not yet join");
         }
-        final now = DateTime.now().millisecondsSinceEpoch;
-        final remainingMillis = chattimercontroller.endTime - now;
-        final remainingSeconds = (remainingMillis / 1000).floor();
+        final remainingSeconds = remaining;
         if (remainingSeconds <= 0) {
           return const SizedBox.shrink();
         }
@@ -265,6 +263,8 @@ class _MyCustomAppBarState extends State<ChatAppBar> {
     // Clear the chat-available flag so loadAllData() doesn't redirect to ChatTab
     // after the session ends (same fix applied in chat_screen.dart backpress).
     await prefs.setBool(ConstantsKeys.ISCHATAVILABLE, false);
+    debugPrint(
+        ">>> TIMER: APPBAR BACKPRESS START: newIsStartTimer=${chattimerController.newIsStartTimer}, endTime=${chattimerController.endTime}, isTimerStarted=${chattimerController.isTimerStarted}");
     callController.newIsStartTimer = false;
     chattimerController.newIsStartTimer = false;
     chattimerController.isTimerStarted = false;
@@ -273,7 +273,10 @@ class _MyCustomAppBarState extends State<ChatAppBar> {
     chattimerController.resetTimer();
     global.chatStartedAt = null;
     global.isChatTimerStarted = false;
+    global.getStorage.write('chatStartedAt', 0);
     global.getStorage.remove('chatEndedAt');
+    debugPrint(
+        ">>> TIMER: APPBAR BACKPRESS DONE: newIsStartTimer=${chattimerController.newIsStartTimer}, endTime=${chattimerController.endTime}");
 
     // Mark chatLeft so the Firebase stream debounce timer in chat_screen.dart
     // doesn't fire a second exit if customer disconnects around the same time.
@@ -282,7 +285,8 @@ class _MyCustomAppBarState extends State<ChatAppBar> {
 
     if (chatController.activeSessions.values.isNotEmpty) {
       final session = chatController.activeSessions.values.first;
-      Get.find<ChatController>().removeSession(session.sessionId, firebasechatId: session.fireBasechatId);
+      Get.find<ChatController>().removeSession(session.sessionId,
+          firebasechatId: session.fireBasechatId);
     } else {
       log('No active audio call sessions found');
     }
@@ -295,20 +299,22 @@ class _MyCustomAppBarState extends State<ChatAppBar> {
         false, widget.firebasechatid.toString(), '${global.currentUserId}',
         extiform: "form back press");
 
+    global.user.chatStatus = 'Online';
+    global.user.callStatus = 'Online';
+    Get.find<SignupController>().update();
+
     bool success = await apiHelper.setAstrologerOnOffBusyline("Online");
     if (success) {
-      Get.back();
       chatController.isInChatScreen = false;
       global.getStorage.write('chatStartedAt', 0);
       await global.getStorage.save();
-      print("exit time:- ${global.getStorage.read('chatStartedAt')}");
       chatController.update();
+      await Get.find<SignupController>().astrologerProfileById(false);
+      Get.back();
     } else {
       log('Failed to set Astrologer status to Online');
+      Get.back();
     }
-    Future.wait([
-      Get.find<SignupController>().astrologerProfileById(false),
-    ]);
 
     showDialog<void>(
       context: context,
@@ -375,6 +381,4 @@ class _MyCustomAppBarState extends State<ChatAppBar> {
       },
     );
   }
-
-
 }

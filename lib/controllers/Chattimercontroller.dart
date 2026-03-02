@@ -12,8 +12,9 @@ class ChattimerController extends GetxController {
   bool newIsStartTimer = false;
   int? currentTime;
   int totalDuration = 0;
+
   void restartTimer(int newDuration) {
-    log('Received duration: $newDuration seconds');
+    debugPrint('>>> TIMER: restartTimer($newDuration) called, isTimerStarted=$isTimerStarted, endTime=$endTime');
     newDuration = newDuration * 1000;
     debugPrint("newDuration:- $newDuration");
     debugPrint("isTimerStarted:- ${!isTimerStarted}");
@@ -45,7 +46,7 @@ class ChattimerController extends GetxController {
   }
 
   void extendTimer(int newDurationSeconds) {
-    log('Received duration: $newDurationSeconds seconds');
+    debugPrint('>>> TIMER: extendTimer($newDurationSeconds) called, prev endTime=$endTime');
     final now = DateTime.now().millisecondsSinceEpoch;
     currentTime = now;
     startTime = now;
@@ -57,6 +58,7 @@ class ChattimerController extends GetxController {
   }
 
   void resetTimer() {
+    debugPrint('>>> TIMER: resetTimer() called, prev: newIsStartTimer=$newIsStartTimer, endTime=$endTime, isTimerStarted=$isTimerStarted');
     isTimerStarted = false;
     startTime = 0;
     endTime = 0;

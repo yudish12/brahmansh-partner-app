@@ -552,19 +552,17 @@ class ChatController extends GetxController {
         log('acceptChatRequest duration (seconds): $duration from "$trimmed"');
         log('sending id is $chatId');
         log('sending id firebase ${global.currentUserId}_$customerId');
+        debugPrint(">>> TIMER: acceptChatRequest BEFORE reset: newIsStartTimer=${chattimercontroller.newIsStartTimer}, endTime=${chattimercontroller.endTime}, isTimerStarted=${chattimercontroller.isTimerStarted}");
         chattimercontroller.newIsStartTimer = false;
         customerEndedChatFCM.value = false;
         chatLeft = false;
-        print(
-            "chattimercontroller.newIsStartTimer:- ${chattimercontroller.newIsStartTimer}");
         global.chatStartedAt = null;
         global.getStorage.write('chatStartedAt', 0);
         global.getStorage.remove('chatEndedAt');
         // Reset timer before opening new chat to ensure clean state
         chattimercontroller.resetTimer();
         await global.getStorage.save();
-        print("exit time:- ${global.getStorage.read('chatStartedAt')}");
-        print("chatDuration:- $duration");
+        debugPrint(">>> TIMER: acceptChatRequest AFTER reset: newIsStartTimer=${chattimercontroller.newIsStartTimer}, endTime=${chattimercontroller.endTime}, chatDuration=$duration");
         
         // Navigate to chat screen
         Get.to(() => ChatScreen(

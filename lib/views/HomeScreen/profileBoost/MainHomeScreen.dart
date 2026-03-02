@@ -400,14 +400,6 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                       children: [
                         GetBuilder<SignupController>(
                           builder: (ctrl) {
-                            if (!_isUpdatingChat && !_isUpdatingCall &&
-                                ctrl.astrologerList.isNotEmpty &&
-                                ctrl.astrologerList[0] != null) {
-                              global.user.chatStatus =
-                                  ctrl.astrologerList[0]!.chatStatus ?? "Offline";
-                              global.user.callStatus =
-                                  ctrl.astrologerList[0]!.callStatus ?? "Offline";
-                            }
                             return _availabilityCard();
                           },
                         ),

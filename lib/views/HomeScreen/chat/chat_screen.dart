@@ -141,9 +141,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _updateOnlineStatus();
       }
 
+      debugPrint(">>> TIMER: INIT BEFORE RESET: newIsStartTimer=${chattimerController.newIsStartTimer}, isTimerStarted=${chattimerController.isTimerStarted}, endTime=${chattimerController.endTime}, isChatTimerStarted=${global.isChatTimerStarted}, chatStartedAt=${global.chatStartedAt}, storageStartedAt=${global.getStorage.read('chatStartedAt')}, storageEndedAt=${global.getStorage.read('chatEndedAt')}, fromrejoin=${widget.fromrejoin}");
+
       if (widget.fromrejoin == 1) {
         _initializeCountdownController();
         _hasStartedTimerOnUserJoin = true;
+        debugPrint(">>> TIMER: REJOIN path: newIsStartTimer=${chattimerController.newIsStartTimer}, endTime=${chattimerController.endTime}");
       } else {
         global.isChatTimerStarted = false;
         chattimerController.newIsStartTimer = false;
@@ -152,7 +155,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         global.getStorage.write('chatStartedAt', 0);
         global.getStorage.remove('chatEndedAt');
         _hasStartedTimerOnUserJoin = false;
-        debugPrint("NOT FROM REJOIN - full timer reset");
+        chattimerController.update();
+        debugPrint(">>> TIMER: FRESH path: newIsStartTimer=${chattimerController.newIsStartTimer}, endTime=${chattimerController.endTime}");
       }
       chatController.chatLeft = false;
       chatController.customerEndedChatFCM.value = false;
@@ -188,10 +192,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         // Update user joined status for enabling/disabling chat input
         isUserJoinedNotifier.value = isInChat;
 
-        // Start timer once when customer joins
-        if (widget.flagId != 2 && isInChat && !_hasStartedTimerOnUserJoin) {
+        // Start timer once when customer joins. Skip the very first snapshot
+        // (_previousIsInChat == null) because it could be stale from a previous
+        // chat session with the same customer (same Firebase path).
+        if (widget.flagId != 2 && isInChat && !_hasStartedTimerOnUserJoin && _previousIsInChat != null) {
           _hasStartedTimerOnUserJoin = true;
           final durationSec = _parseDurationSeconds(widget.chatduration);
+          debugPrint(">>> TIMER: STREAM transition to true, starting timer with duration=$durationSec");
           if (durationSec > 0) {
             final now = DateTime.now().millisecondsSinceEpoch;
             global.chatStartedAt = now;
@@ -201,7 +208,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             global.isChatTimerStarted = true;
             global.getStorage.write('chatEndedAt', chattimerController.endTime);
             chattimerController.update();
-            debugPrint('Chat timer started on user join: duration=${durationSec}s');
           }
         }
 
@@ -300,13 +306,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     chattimerController.totalDuration = safeSec * 1000;
     chattimerController.endTime = now + (safeSec * 1000);
     chattimerController.isTimerStarted = true;
-    // Must also set global flag so the Firebase stream exit condition fires
-    // for rejoin sessions (same guard used for normal sessions).
+    chattimerController.newIsStartTimer = true;
+    chattimerController.currentTime = now;
     global.isChatTimerStarted = true;
+    global.chatStartedAt = now;
+    global.getStorage.write('chatStartedAt', now);
     global.getStorage.write('chatEndedAt', chattimerController.endTime);
     chattimerController.update();
     debugPrint(
-        "Rejoin: endTime=${chattimerController.endTime}, totalDuration=${chattimerController.totalDuration}");
+        ">>> TIMER: _initializeCountdownController: endTime=${chattimerController.endTime}, newIsStartTimer=${chattimerController.newIsStartTimer}, duration=$safeSec");
   }
 
   Future<bool> _requestMicPermission() async {
@@ -554,6 +562,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   void _updateChatSession() {
+    debugPrint(">>> TIMER: _updateChatSession CALLED - chatLeft=${chatController.chatLeft}, newIsStartTimer=${chattimerController.newIsStartTimer}, endTime=${chattimerController.endTime}");
     print("chatduration:- ${widget.chatduration}");
     final lastSaved = global.getStorage.read('chatStartedAt');
     final chatEndedAt = chattimerController.endTime > 0
@@ -1753,6 +1762,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     callController.update();
     chattimerController.resetTimer();
     global.chatStartedAt = null;
+    global.getStorage.write('chatStartedAt', 0);
+    global.getStorage.remove('chatEndedAt');
+    debugPrint(">>> TIMER: BACKPRESS RESET DONE: newIsStartTimer=${chattimerController.newIsStartTimer}, endTime=${chattimerController.endTime}, isTimerStarted=${chattimerController.isTimerStarted}");
 
     if (chatController.activeSessions.values.isNotEmpty) {
       final session = chatController.activeSessions.values.first;
@@ -1789,19 +1801,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
       await apiHelper.setAstrologerOnOffBusyline("Online");
 
-      Get.back();
       chatController.isInChatScreen = false;
       global.getStorage.write('chatStartedAt', 0);
       global.getStorage.remove('chatEndedAt');
       await global.getStorage.save();
       print("exit time:- ${global.getStorage.read('chatStartedAt')}");
       chatController.update();
-      // Fire-and-forget profile refresh after navigation
-      unawaited(Future.wait([
-        Get.find<SignupController>().astrologerProfileById(false),
-      ]));
+      await Get.find<SignupController>().astrologerProfileById(false);
 
-      // After Get.back() the widget is unmounted — use the navigator overlay context
+      Get.off(() => HomeScreen());
+
       final dialogCtx = Get.overlayContext;
       if (dialogCtx == null) return;
       showDialog<void>(

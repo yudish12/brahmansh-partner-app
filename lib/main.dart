@@ -311,21 +311,22 @@ class _MyAppState extends State<MyApp> {
       print('notification onMessage foreground ->  $message');
       if (message.data['title'] == ConstantsKeys.StartSimpleChatTimer) {
         Map<String, dynamic> notibody = jsonDecode(message.data['body']);
-        debugPrint('StartSimpleChatTimer notibody $notibody');
+        debugPrint('>>> TIMER: StartSimpleChatTimer FCM received, isTimerStarted=${chatitmercontroller.isTimerStarted}, newIsStartTimer=${chatitmercontroller.newIsStartTimer}');
 
-        if (notibody.containsKey('timeInInt') &&
-            chatitmercontroller.isTimerStarted) {
+        if (notibody.containsKey('timeInInt')) {
           int newDuration = int.parse(notibody['timeInInt'].toString());
-          int currentDurationSec = chatitmercontroller.totalDuration ~/ 1000;
-          if (newDuration != currentDurationSec) {
-            chatitmercontroller.restartTimer(newDuration);
-            debugPrint(
-                'StartSimpleChatTimer: extended from ${currentDurationSec}s to ${newDuration}s');
+          if (chatitmercontroller.isTimerStarted) {
+            int currentDurationSec = chatitmercontroller.totalDuration ~/ 1000;
+            if (newDuration != currentDurationSec) {
+              chatitmercontroller.restartTimer(newDuration);
+              debugPrint('>>> TIMER: StartSimpleChatTimer extended to ${newDuration}s');
+            } else {
+              debugPrint('>>> TIMER: StartSimpleChatTimer same duration, ignored');
+            }
+          } else {
+            debugPrint('>>> TIMER: StartSimpleChatTimer timer not started yet, ignoring FCM');
           }
           chatitmercontroller.update();
-        } else {
-          debugPrint(
-              'StartSimpleChatTimer: timer not started yet, Firebase stream will handle it');
         }
       } else if (message.data['title'] == ConstantsKeys.callrejectedcustomer) {
         log('is in callscren or not ${global.isinAcceptCallscreen}');
@@ -349,7 +350,7 @@ class _MyAppState extends State<MyApp> {
           log('do nothing no inside callscreen');
         }
       } else if (message.data['title'] == ConstantsKeys.EndChatFromCustomer) {
-        log('EndChatFromCustomer isInChatScreen ${chatController.isInChatScreen}');
+        debugPrint('>>> TIMER: EndChatFromCustomer FCM received, isInChatScreen=${chatController.isInChatScreen}');
         if (chatController.isInChatScreen) {
           // Signal that customer ended chat so chat_screen.dart's Firebase stream
           // listener can trigger backpress() immediately (skip the 8-second debounce).
