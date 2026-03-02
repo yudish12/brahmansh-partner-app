@@ -8,9 +8,7 @@ import 'package:brahmanshtalk/views/HomeScreen/Drawer/Wallet/add_amount_screen.d
 import 'package:brahmanshtalk/widgets/common_textfield_widget.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:brahmanshtalk/utils/global.dart' as global;
 import 'package:sizer/sizer.dart';

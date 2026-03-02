@@ -72,47 +72,22 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
   final chatAvailabilityController = Get.find<ChatAvailabilityController>();
   final callAvailabilityController = Get.find<CallAvailabilityController>();
 
-  bool isChatOnline = false;
-  bool isCallOnline = false;
   bool isVideoCallOnline = false;
-  bool isProfileBoostActive = false;
-
-  // Add these status variables
-  String chatStatus = "Offline";
-  String callStatus = "Offline";
   String videoCallStatus = "Offline";
-  String boostStatus = "Inactive";
+  bool _isUpdatingChat = false;
+  bool _isUpdatingCall = false;
 
   @override
   void initState() {
     super.initState();
-    _loadInitialStatus();
-  }
-
-  /// Load initial chat/call status from global.user
-  void _loadInitialStatus() {
-    log('loadInitialStatus');
-    log('userChatStatus ${global.user.chatStatus}');
-    log('userCallStatus ${global.user.callStatus}');
-    // Load chat status
-    final userChatStatus = global.user.chatStatus ?? "Offline";
-    isChatOnline = userChatStatus == "Online";
-    chatStatus = userChatStatus;
-
-    // Load call status
-    final userCallStatus = global.user.callStatus ?? "Offline";
-    isCallOnline = userCallStatus == "Online";
-    callStatus = userCallStatus;
-
-    setState(() {
-      isChatOnline = userChatStatus == "Online";
-      chatStatus = userChatStatus;
-      isCallOnline = userCallStatus == "Online";
-      callStatus = userCallStatus;
-    });
   }
 
   Widget _availabilityCard() {
+    final chatStatus = global.user.chatStatus ?? "Offline";
+    final callStatus = global.user.callStatus ?? "Offline";
+    final chatOn = chatStatus == "Online";
+    final callOn = callStatus == "Online";
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -121,96 +96,82 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
       ),
       child: Column(
         children: [
-          _availabilityRow(
-              "Chat", "₹17.0/min", isChatOnline, chatStatus, isChatOnline,
+          _availabilityRow("Chat", chatOn, chatStatus,
               onChanged: (value) async {
-            setState(() {
-              isChatOnline = value;
-              chatStatus = value ? "Online" : "Offline";
-            });
-            // Call API to update chat status
+            if (_isUpdatingChat) return;
+            _isUpdatingChat = true;
+            global.user.chatStatus = value ? "Online" : "Offline";
+            signupController.update();
             await _updateServiceStatus("chat", value);
+            _isUpdatingChat = false;
           }),
-          Divider(),
-          _availabilityRow(
-              "Call", "₹17.0/min", isCallOnline, callStatus, isCallOnline,
+          const Divider(),
+          _availabilityRow("Call", callOn, callStatus,
               onChanged: (value) async {
-            setState(() {
-              isCallOnline = value;
-              callStatus = value ? "Online" : "Offline";
-            });
-            // Call API to update call status
+            if (_isUpdatingCall) return;
+            _isUpdatingCall = true;
+            global.user.callStatus = value ? "Online" : "Offline";
+            signupController.update();
             await _updateServiceStatus("call", value);
+            _isUpdatingCall = false;
           }),
-          Divider(),
-          // _availabilityRow("Video Call", "₹17.0/min", isVideoCallOnline,
-          //     videoCallStatus, isVideoCallOnline, onChanged: (value) async {
-          //   setState(() {
-          //     isVideoCallOnline = value;
-          //     videoCallStatus = value ? "Online" : "Offline";
-          //   });
-          //   // Call API to update video call status
-          //   await _updateServiceStatus("video_call", value);
-          // }),
         ],
       ),
     );
   }
 
-  Widget _availabilityRow(
-      String title, String rate, bool value, String status, bool isOnline,
+  Widget _availabilityRow(String title, bool switchOn, String status,
       {required ValueChanged<bool> onChanged}) {
+    final isBusy = status == "Busy";
+    final isOnline = status == "Online";
+
+    Color chipBg;
+    Color chipText;
+    if (isOnline) {
+      chipBg = Colors.green.shade100;
+      chipText = Colors.green;
+    } else if (isBusy) {
+      chipBg = Colors.orange.shade100;
+      chipText = Colors.orange.shade800;
+    } else {
+      chipBg = Colors.grey.shade200;
+      chipText = Colors.grey;
+    }
+
     return Row(
       children: [
-        /// SERVICE INFO - Left side
         Expanded(
-          flex: 4, // Increased flex for better spacing
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(title,
-                  style:
-                      TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600)),
-              // Text(rate, style: TextStyle(fontSize: 10.sp, color: Colors.grey)),
-            ],
-          ),
+          flex: 4,
+          child: Text(title,
+              style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600)),
         ),
-
-        /// SPACER
         SizedBox(width: 2.w),
-
-        /// SWITCH - Center
         Expanded(
           flex: 2,
           child: Container(
             alignment: Alignment.center,
             child: Switch(
-              value: value,
+              value: switchOn,
               activeColor: Colors.green,
-              onChanged: onChanged,
+              onChanged: isBusy ? null : onChanged,
             ),
           ),
         ),
-
-        /// SPACER
         SizedBox(width: 2.w),
-
-        /// STATUS CHIP - Right side
         Expanded(
           flex: 4,
           child: Container(
             alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
             decoration: BoxDecoration(
-              color: isOnline ? Colors.green.shade100 : Colors.grey.shade200,
+              color: chipBg,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
               status,
               style: TextStyle(
                 fontSize: 9.sp,
-                color: isOnline ? Colors.green : Colors.grey,
+                color: chipText,
                 fontWeight: FontWeight.w600,
               ),
               textAlign: TextAlign.center,
@@ -258,24 +219,17 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
 
       log("Updated $serviceType status to: $statusValue");
     } catch (e) {
-      // Revert the state if API fails
-      setState(() {
-        if (serviceType == "chat") {
-          isChatOnline = !isOnline;
-          chatStatus = isChatOnline ? "Online" : "Offline";
-        } else if (serviceType == "call") {
-          isCallOnline = !isOnline;
-          callStatus = isCallOnline ? "Online" : "Offline";
-        } else if (serviceType == "video_call") {
-          isVideoCallOnline = !isOnline;
-          videoCallStatus = isVideoCallOnline ? "Online" : "Offline";
-        }
-      });
+      // Revert global.user on failure
+      if (serviceType == "chat") {
+        global.user.chatStatus = isOnline ? "Offline" : "Online";
+      } else if (serviceType == "call") {
+        global.user.callStatus = isOnline ? "Offline" : "Online";
+      }
+      signupController.update();
 
       global.showToast(
         message: "Failed to update $serviceType status. Please try again.",
       );
-
       log("Error updating $serviceType status: $e");
     }
   }
@@ -446,17 +400,13 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                       children: [
                         GetBuilder<SignupController>(
                           builder: (ctrl) {
-                            // Re-sync toggle state whenever the controller updates
-                            if (ctrl.astrologerList.isNotEmpty &&
+                            if (!_isUpdatingChat && !_isUpdatingCall &&
+                                ctrl.astrologerList.isNotEmpty &&
                                 ctrl.astrologerList[0] != null) {
-                              final freshChat =
+                              global.user.chatStatus =
                                   ctrl.astrologerList[0]!.chatStatus ?? "Offline";
-                              final freshCall =
+                              global.user.callStatus =
                                   ctrl.astrologerList[0]!.callStatus ?? "Offline";
-                              isChatOnline = freshChat == "Online";
-                              chatStatus = freshChat;
-                              isCallOnline = freshCall == "Online";
-                              callStatus = freshCall;
                             }
                             return _availabilityCard();
                           },
