@@ -72,7 +72,13 @@ Future<void> handleBackgroundMessage(RemoteMessage message) async {
   if (global.sp != null &&
       global.sp!.getString(ConstantsKeys.CURRENTUSER) != null) {
     if (message.data.isNotEmpty) {
-      var messageData = json.decode((message.data['body']));
+      // Handle "End chat from customer" when app is in background so we can redirect on resume
+      if (message.data['title'] == ConstantsKeys.EndChatFromCustomer) {
+        await global.sp?.setBool(ConstantsKeys.CUSTOMER_ENDED_CHAT, true);
+        debugPrint('>>> EndChatFromCustomer received in background, set CUSTOMER_ENDED_CHAT');
+        return;
+      }
+      var messageData = json.decode((message.data['body'] ?? '{}'));
       print('notification body background ->  $messageData');
       if (messageData['notificationType'] != null) {
         switch (messageData['notificationType']) {

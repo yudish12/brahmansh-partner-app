@@ -10,6 +10,8 @@ class ConstantsKeys {
   static const String TimeAndSession = "For timer and session start for live";
   static const String StartSimpleChatTimer = "Chat Timer Started";
   static const String EndChatFromCustomer = "End chat from customer";
+  /// Set by background FCM when customer ends chat; ChatScreen clears it and calls backpress on resume.
+  static const String CUSTOMER_ENDED_CHAT = "customer_ended_chat";
   static const String RejectChatFromAstrologer =
       "Reject call request from astrologer";
   static const String ISCHATAVILABLE = "is_chatdataAvailable";

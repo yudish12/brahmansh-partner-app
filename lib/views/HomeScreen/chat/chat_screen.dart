@@ -261,6 +261,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     super.didChangeAppLifecycleState(state);
     if (state != AppLifecycleState.resumed || widget.flagId == 2) return;
     if (!mounted) return;
+    // Customer ended chat while app was in background (FCM set CUSTOMER_ENDED_CHAT)
+    SharedPreferences.getInstance().then((prefs) async {
+      final customerEnded = prefs.getBool(ConstantsKeys.CUSTOMER_ENDED_CHAT) ?? false;
+      if (customerEnded && mounted && !chatController.chatLeft) {
+        await prefs.setBool(ConstantsKeys.CUSTOMER_ENDED_CHAT, false);
+        if (!mounted) return;
+        debugPrint('>>> App resumed: customer had ended chat (FCM in background), calling backpress');
+        backpress(eddedfrom: "app resumed after customer ended FCM");
+      }
+    });
     // Only check if chat timer was actually started (user joined) and we're in active chat
     if ((global.isChatTimerStarted == true) &&
         chattimerController.isTimerStarted &&
