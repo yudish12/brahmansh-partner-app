@@ -1937,6 +1937,27 @@ class APIHelper {
     }
   }
 
+  Future<Map<String, dynamic>?> getAstroEarnings(int astrologerId) async {
+    try {
+      final response = await http.post(
+        Uri.parse("${appParameters[appMode]['apiUrl']}getAstroEarnings"),
+        headers: await global.getApiHeaders(true),
+        body: json.encode({"astrologerId": astrologerId}),
+      );
+      log('getAstroEarnings response: ${response.body}');
+      if (response.statusCode == 200) {
+        final decoded = json.decode(response.body);
+        if (decoded['status'] == true) {
+          return Map<String, dynamic>.from(decoded['recordList']);
+        }
+      }
+      return null;
+    } catch (e) {
+      print('Exception: $screen - getAstroEarnings():-$e');
+      return null;
+    }
+  }
+
   //-------------------------------Notification---------------------------------//
   Future<dynamic> getNotification(int startIndex, int record) async {
     try {

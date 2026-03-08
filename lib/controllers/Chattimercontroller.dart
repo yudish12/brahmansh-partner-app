@@ -60,9 +60,12 @@ class ChattimerController extends GetxController {
   void resetTimer() {
     debugPrint('>>> TIMER: resetTimer() called, prev: newIsStartTimer=$newIsStartTimer, endTime=$endTime, isTimerStarted=$isTimerStarted');
     isTimerStarted = false;
+    newIsStartTimer = false;
     startTime = 0;
     endTime = 0;
     remainingTime = 0;
+    currentTime = null;
+    totalDuration = 0;
     log('Timer has been reset');
     update();
   }

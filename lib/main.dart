@@ -71,13 +71,15 @@ Future<void> handleBackgroundMessage(RemoteMessage message) async {
   global.sp = await SharedPreferences.getInstance();
   if (global.sp != null &&
       global.sp!.getString(ConstantsKeys.CURRENTUSER) != null) {
+    // End chat from customer can come in data (timer/backend) or notification (customer Exit → callOnFcmApiSendPushNotifications)
+    final isEndChatFromCustomer = message.data['title'] == ConstantsKeys.EndChatFromCustomer ||
+        message.notification?.title == ConstantsKeys.EndChatFromCustomer;
+    if (isEndChatFromCustomer) {
+      await global.sp?.setBool(ConstantsKeys.CUSTOMER_ENDED_CHAT, true);
+      debugPrint('>>> EndChatFromCustomer received in background, set CUSTOMER_ENDED_CHAT');
+      return;
+    }
     if (message.data.isNotEmpty) {
-      // Handle "End chat from customer" when app is in background so we can redirect on resume
-      if (message.data['title'] == ConstantsKeys.EndChatFromCustomer) {
-        await global.sp?.setBool(ConstantsKeys.CUSTOMER_ENDED_CHAT, true);
-        debugPrint('>>> EndChatFromCustomer received in background, set CUSTOMER_ENDED_CHAT');
-        return;
-      }
       var messageData = json.decode((message.data['body'] ?? '{}'));
       print('notification body background ->  $messageData');
       if (messageData['notificationType'] != null) {
@@ -355,20 +357,28 @@ class _MyAppState extends State<MyApp> {
         } else {
           log('do nothing no inside callscreen');
         }
-      } else if (message.data['title'] == ConstantsKeys.EndChatFromCustomer) {
-        debugPrint('>>> TIMER: EndChatFromCustomer FCM received, isInChatScreen=${chatController.isInChatScreen}');
+      } else if ((message.data['title'] == ConstantsKeys.EndChatFromCustomer) ||
+          (message.notification?.title == ConstantsKeys.EndChatFromCustomer)) {
+        final sessionAtReceive = chatController.chatSessionCounter;
+        debugPrint('>>> TIMER: EndChatFromCustomer FCM received, isInChatScreen=${chatController.isInChatScreen}, sessionCounter=$sessionAtReceive');
         if (chatController.isInChatScreen) {
-          // Signal that customer ended chat so chat_screen.dart's Firebase stream
-          // listener can trigger backpress() immediately (skip the 8-second debounce).
-          // Do NOT call chattimerController.resetTimer() or clear isChatTimerStarted
-          // here — those flags are checked by the Firebase stream listener to call
-          // backpress(). Clearing them would prevent proper exit and leave the screen
-          // stuck open.
-          chatController.customerEndedChatFCM.value = true;
-          chatController.update();
-          global.showToast(message: 'User ended the chat');
-          // Set astrologer back online optimistically (backpress will also do this)
-          unawaited(apiHelper.setAstrologerOnOffBusyline("Online"));
+          // Guard: only honour this FCM if the session counter hasn't changed since
+          // it arrived. A changed counter means a NEW chat started and this FCM
+          // belongs to the previous (already-ended) session.
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (chatController.chatSessionCounter != sessionAtReceive) {
+              debugPrint('>>> TIMER: EndChatFromCustomer FCM STALE (session changed $sessionAtReceive → ${chatController.chatSessionCounter}), ignoring');
+              return;
+            }
+            if (!chatController.isInChatScreen || chatController.chatLeft) {
+              debugPrint('>>> TIMER: EndChatFromCustomer FCM ignored (no longer in chat or chatLeft)');
+              return;
+            }
+            chatController.customerEndedChatFCM.value = true;
+            chatController.update();
+            global.showToast(message: 'User ended the chat');
+            unawaited(apiHelper.setAstrologerOnOffBusyline("Online"));
+          });
         } else {
           log('do nothing chat dismiss');
         }
@@ -380,27 +390,23 @@ class _MyAppState extends State<MyApp> {
           global.sp!.getString(ConstantsKeys.CURRENTUSER) != null) {
         if (message.data.isNotEmpty) {
           print('notification body background 1 ->  ${message.data}');
-          var messageData = json.decode((message.data['body']));
+          var messageData = json.decode((message.data['body'] ?? '{}'));
           if (messageData['notificationType'] != null) {
             switch (messageData['notificationType']) {
               case 8:
                 if (message.data['title'] != "Chat Timer Started") {
-                  final incomingChatId = messageData['chatId'];
+                  final rawChatId = messageData['chatId'];
+                  final incomingChatId = rawChatId is int
+                      ? rawChatId
+                      : int.tryParse(rawChatId?.toString() ?? '');
                   final userName = messageData['userName'] ?? 'User';
                   bool shouldShowCallKit = true;
                   log('incomingChatId $incomingChatId');
                   log('userName $userName');
-                  // Check if chat is already in progress to prevent showing CallKit again
-                  if (chatController.isInChatScreen) {
-                    log('Chat already in progress, showing simple notification instead of CallKit');
-                    _showSimpleChatNotification(
-                        userName, 'Chat request update');
-                    shouldShowCallKit = false;
-                  }
-
-                  // Check if this chatId was already accepted
-                  if (incomingChatId != null && shouldShowCallKit) {
-                    // Check if chatId is in the accepted set
+                  // Only suppress CallKit for duplicates (same chat already accepted or in list).
+                  // Do NOT suppress just because we are in chat screen — waitlist sends a NEW chatId
+                  // and must show as full CallKit "calling" type.
+                  if (incomingChatId != null) {
                     if (chatController.acceptedChatIds
                         .contains(incomingChatId)) {
                       log('Chat $incomingChatId already accepted, showing simple notification instead of CallKit');
@@ -408,14 +414,11 @@ class _MyAppState extends State<MyApp> {
                           userName, 'Chat request update');
                       shouldShowCallKit = false;
                     }
-
-                    // Also check if chat is already in the chat list (meaning it was accepted)
                     if (shouldShowCallKit) {
                       final chatExists = chatController.chatList
                           .any((chat) => chat.chatId == incomingChatId);
                       if (chatExists) {
                         log('Chat $incomingChatId already exists in list, showing simple notification instead of CallKit');
-                        // Mark it as accepted to prevent future notifications
                         chatController.acceptedChatIds.add(incomingChatId);
                         _showSimpleChatNotification(
                             userName, 'Chat request update');
@@ -426,7 +429,6 @@ class _MyAppState extends State<MyApp> {
 
                   if (shouldShowCallKit) {
                     log('inside foreground noti type 8 - showing CallKit notification for chatId: $incomingChatId');
-                    // Show incoming chat notification with accept/reject buttons (same as call)
                     CallUtils.showIncomingChat(messageData);
                   }
 
@@ -629,6 +631,12 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
+  int _parseToInt(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    return int.tryParse(value.toString()) ?? 0;
+  }
+
   void initializeCallKitEventHandlers() async {
     dynamic fcmToken = await FirebaseMessaging.instance.getToken();
     log('FCM token is $fcmToken');
@@ -644,7 +652,7 @@ class _MyAppState extends State<MyApp> {
         case Event.actionCallAccept:
           // Handle call/chat accept action
           final prefs = await SharedPreferences.getInstance();
-          final notificationType = event.body['extra']["notificationType"];
+          final notificationType = _parseToInt(event.body['extra']["notificationType"]);
 
           print(
               'actionCallAccept incoming - notificationType: $notificationType');
@@ -669,7 +677,7 @@ class _MyAppState extends State<MyApp> {
           await prefs.reload(); // <-- IMPORTANT: force reload from disk
 
           final notificationTypeDecline =
-              event.body['extra']["notificationType"];
+              _parseToInt(event.body['extra']["notificationType"]);
 
           // Handle chat rejection (type 8)
           if (notificationTypeDecline == 8) {
@@ -682,8 +690,8 @@ class _MyAppState extends State<MyApp> {
           }
           // Handle call rejection (type 2)
           else if (notificationTypeDecline == 2) {
-            if (event.body['extra']['call_type'] == 10 ||
-                event.body['extra']['call_type'] == 11) {
+            final callType = _parseToInt(event.body['extra']['call_type']);
+            if (callType == 10 || callType == 11) {
               bool isAlreadyRejected =
                   prefs.getBool(ConstantsKeys.ISREJECTED) ?? false;
               log('isAlreadyRejected in backgorund ${!isAlreadyRejected} and real is $isAlreadyRejected');
@@ -707,7 +715,7 @@ class _MyAppState extends State<MyApp> {
 
         case Event.actionCallCallback:
           final notificationTypeCallback =
-              event.body['extra']["notificationType"];
+              _parseToInt(event.body['extra']["notificationType"]);
           if (notificationTypeCallback == 8) {
             chatAccept(event);
           } else {
@@ -733,13 +741,15 @@ class _MyAppState extends State<MyApp> {
     //clear notification
     await localNotifications.cancelAll();
 
-    if (event.body['extra']["notificationType"] == 2) {
+    final notiType = _parseToInt(event.body['extra']["notificationType"]);
+    if (notiType == 2) {
       callController.callList.clear();
       callController.update();
       await callController.getCallList(false);
       callController.update();
 
-      if (event.body['extra']['call_type'] == 10) {
+      final callType = _parseToInt(event.body['extra']['call_type']);
+      if (callType == 10) {
         global.isaudioCallinprogress = 0;
         log('Accept call agora or hms');
         callController.acceptCallRequest(
@@ -751,7 +761,7 @@ class _MyAppState extends State<MyApp> {
           event.body['extra']['call_duration'].toString(),
           event.body['extra']['call_method'].toString(),
         );
-      } else if (event.body['extra']['call_type'] == 11) {
+      } else if (callType == 11) {
         callController.acceptVideoCallRequest(
           event.body['extra']['callId'],
           event.body['extra']['profile'],

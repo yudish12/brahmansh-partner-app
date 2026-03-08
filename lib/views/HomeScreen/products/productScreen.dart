@@ -15,11 +15,13 @@ import '../../../constants/colorConst.dart';
 class Productscreen extends StatefulWidget {
   int astroId;
   int? userid;
+  int? customerId;
   bool? isFromHomeScreen;
   Productscreen({
     super.key,
     required this.astroId,
     this.userid,
+    this.customerId,
     this.isFromHomeScreen = false,
   });
 
@@ -92,21 +94,19 @@ class _ProductscreenState extends State<Productscreen>
                   ? const SizedBox()
                   : InkWell(
                       onTap: () {
-                        productcontroller.selectedProduct != -1
-                            ? productcontroller.productRecommend(
-                                productcontroller
-                                    .productData[
-                                        productcontroller.selectedProduct ?? 0]
-                                    .id
-                                    .toString(),
-                                widget.astroId.toString(),
-                              )
-                            : () {
-                                log('Please select product');
-                              };
+                        if (productcontroller.selectedProduct != -1) {
+                          final product = productcontroller.productData[
+                              productcontroller.selectedProduct ?? 0];
+                          productcontroller.productRecommend(
+                            product.id.toString(),
+                            widget.astroId.toString(),
+                            productName: product.name,
+                            productPrice: product.amount?.toString(),
+                            customerId: widget.customerId,
+                          );
+                        }
 
                         if (productcontroller.suggestpuja != -1) {
-                          // log('clicked on assignedToUser userid ${widget.
                           productcontroller.assignedToUser(
                             widget.userid,
                             productcontroller
@@ -118,18 +118,18 @@ class _ProductscreenState extends State<Productscreen>
                           productcontroller.update();
                         }
 
-                        productcontroller.selectpuja != -1
-                            ? productcontroller.pujaRecommend(
-                                productcontroller
-                                    .poojalist![productcontroller.selectpuja ??
-                                        0] //puja id
-                                    .id
-                                    .toString(),
-                                widget.astroId.toString(),
-                              )
-                            : () {
-                                log('Please select puja');
-                              };
+                        if (productcontroller.selectpuja != -1) {
+                          final puja = productcontroller
+                              .poojalist![productcontroller.selectpuja ?? 0];
+                          productcontroller.pujaRecommend(
+                            puja.id.toString(),
+                            widget.astroId.toString(),
+                            pujaName: puja.pujaTitle,
+                            pujaPrice:
+                                puja.packages?.first.packagePrice?.toString(),
+                            customerId: widget.customerId,
+                          );
+                        }
                       },
                       child: Container(
                         decoration: BoxDecoration(

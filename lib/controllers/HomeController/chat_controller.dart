@@ -60,6 +60,12 @@ class ChatController extends GetxController {
   bool isInChatScreen = false;
   bool isReading = true;
   bool chatLeft = false;
+  /// Tracks the firebaseChatId of the currently active chat session so we can
+  /// ignore stale "End chat from customer" FCMs that arrive from a previous session.
+  String? currentActiveChatFirebaseId;
+  /// Monotonically increasing session counter so the FCM handler can tell whether
+  /// the "End chat from customer" belongs to the current session or a previous one.
+  int chatSessionCounter = 0;
   /// Set to true by the EndChatFromCustomer FCM handler. chat_screen.dart
   /// uses an ever() Worker on this so backpress() fires immediately without
   /// waiting for the Firebase isInChat stream debounce.
@@ -556,6 +562,9 @@ class ChatController extends GetxController {
         chattimercontroller.newIsStartTimer = false;
         customerEndedChatFCM.value = false;
         chatLeft = false;
+        chatSessionCounter++;
+        currentActiveChatFirebaseId = '${global.currentUserId}_$customerId';
+        debugPrint('>>> chatSessionCounter bumped to $chatSessionCounter for $currentActiveChatFirebaseId');
         global.chatStartedAt = null;
         global.getStorage.write('chatStartedAt', 0);
         global.getStorage.remove('chatEndedAt');

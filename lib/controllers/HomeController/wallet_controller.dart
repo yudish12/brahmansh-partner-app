@@ -22,6 +22,42 @@ class WalletController extends GetxController {
     update();
   }
 
+  bool isEarningsLoading = false;
+  double earningsToday = 0;
+  double earningsYesterday = 0;
+  double earningsWeekly = 0;
+  double earningsMonthly = 0;
+  double earningsLast3Months = 0;
+  double totalWithdrawn = 0;
+  double currentBalance = 0;
+  int todayCallsCount = 0;
+  int todayChatsCount = 0;
+
+  Future<void> getAstroEarnings() async {
+    try {
+      isEarningsLoading = true;
+      update();
+      final astrologerId = global.user.id ?? 0;
+      final data = await apiHelper.getAstroEarnings(astrologerId);
+      if (data != null) {
+        earningsToday = (data['today'] ?? 0).toDouble();
+        earningsYesterday = (data['yesterday'] ?? 0).toDouble();
+        earningsWeekly = (data['weekly'] ?? 0).toDouble();
+        earningsMonthly = (data['monthly'] ?? 0).toDouble();
+        earningsLast3Months = (data['last3Months'] ?? 0).toDouble();
+        totalWithdrawn = (data['total_withdrawn'] ?? 0).toDouble();
+        currentBalance = (data['current_balance'] ?? 0).toDouble();
+        todayCallsCount = (data['today_calls_count'] ?? 0).toInt();
+        todayChatsCount = (data['today_chats_count'] ?? 0).toInt();
+      }
+    } catch (e) {
+      print("Exception in getAstroEarnings: $e");
+    } finally {
+      isEarningsLoading = false;
+      update();
+    }
+  }
+
   List<RecordList> withdrawList = [];
   //Bank account
   final cBankNumber = TextEditingController();

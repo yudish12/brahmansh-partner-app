@@ -9,7 +9,7 @@ import 'package:brahmanshtalk/controllers/HomeController/timer_controller.dart';
 import 'package:brahmanshtalk/controllers/HomeController/wallet_controller.dart';
 import 'package:brahmanshtalk/services/apiHelper.dart';
 import 'package:brahmanshtalk/utils/global.dart' as global;
-import 'package:brahmanshtalk/views/HomeScreen/products/productScreen.dart';
+// import 'package:brahmanshtalk/views/HomeScreen/products/productScreen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_countdown_timer/current_remaining_time.dart';
@@ -217,22 +217,19 @@ class _MyCustomAppBarState extends State<ChatAppBar> {
           },
           onEnd: () {
             print("onEnd");
-
             print(
                 "chattimercontroller.newIsStartTimer:- ${chattimercontroller.newIsStartTimer}");
             if (chattimercontroller.newIsStartTimer) {
-              chattimercontroller.newIsStartTimer = false;
-              chattimercontroller.update();
-              chattimercontroller.update();
               final now = DateTime.now().millisecondsSinceEpoch;
               if (now >= chattimercontroller.endTime) {
                 debugPrint(
                     'Timer ended naturally - ending chat ${chattimercontroller.endTime}');
+                chattimercontroller.newIsStartTimer = false;
+                chattimercontroller.update();
                 backpress();
               } else {
                 debugPrint(
-                    '⚠️ Timer onEnd triggered early, ignored. ${chattimercontroller.endTime}');
-                // Don't call backpress on early end - timer widget might be rebuilding
+                    '⚠️ Timer onEnd triggered early/stale, ignored. now=$now, endTime=${chattimercontroller.endTime}');
               }
             } else {
               print("else");
@@ -278,10 +275,9 @@ class _MyCustomAppBarState extends State<ChatAppBar> {
     debugPrint(
         ">>> TIMER: APPBAR BACKPRESS DONE: newIsStartTimer=${chattimerController.newIsStartTimer}, endTime=${chattimerController.endTime}");
 
-    // Mark chatLeft so the Firebase stream debounce timer in chat_screen.dart
-    // doesn't fire a second exit if customer disconnects around the same time.
     chatController.chatLeft = true;
     chatController.customerEndedChatFCM.value = false;
+    chatController.currentActiveChatFirebaseId = null;
 
     if (chatController.activeSessions.values.isNotEmpty) {
       final session = chatController.activeSessions.values.first;
@@ -316,69 +312,68 @@ class _MyCustomAppBarState extends State<ChatAppBar> {
       Get.back();
     }
 
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false, // user must tap button!
-      builder: (BuildContext context) {
-        return AlertDialog(
-          contentPadding: EdgeInsets.zero,
-          // title: const Text('AlertDialog Title'),
-          content: Container(
-            alignment: Alignment.center,
-            margin: const EdgeInsets.only(bottom: 8),
-            height: 12.h,
-            decoration: const BoxDecoration(
-              color: Colors.amber,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-            ),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(15),
-              child: Container(
-                alignment: Alignment.center,
-                child: Image.asset(
-                  'assets/images/interrogation-mark.png',
-                  height: 7.h,
-                ),
-              ),
-            ),
-          ),
-          actions: [
-            Text(
-              'Do you want to Recommend a Product ?',
-              style: Get.textTheme.bodyMedium?.copyWith(
-                fontSize: 12.sp,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                  ),
-                  child: const Text('No'),
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                ),
-                SizedBox(width: 3.w),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                  ),
-                  child: const Text('Yes'),
-                  onPressed: () {
-                    Get.back();
-                    productController.getProductList();
-                    Get.to(() => Productscreen(astroId: widget.customerid!));
-                  },
-                ),
-              ],
-            ),
-          ],
-        );
-      },
-    );
+    // showDialog<void>(
+    //   context: context,
+    //   barrierDismissible: false,
+    //   builder: (BuildContext context) {
+    //     return AlertDialog(
+    //       contentPadding: EdgeInsets.zero,
+    //       content: Container(
+    //         alignment: Alignment.center,
+    //         margin: const EdgeInsets.only(bottom: 8),
+    //         height: 12.h,
+    //         decoration: const BoxDecoration(
+    //           color: Colors.amber,
+    //           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    //         ),
+    //         child: SingleChildScrollView(
+    //           padding: const EdgeInsets.all(15),
+    //           child: Container(
+    //             alignment: Alignment.center,
+    //             child: Image.asset(
+    //               'assets/images/interrogation-mark.png',
+    //               height: 7.h,
+    //             ),
+    //           ),
+    //         ),
+    //       ),
+    //       actions: [
+    //         Text(
+    //           'Do you want to Recommend a Product ?',
+    //           style: Get.textTheme.bodyMedium?.copyWith(
+    //             fontSize: 12.sp,
+    //             fontWeight: FontWeight.w500,
+    //           ),
+    //         ),
+    //         Row(
+    //           mainAxisAlignment: MainAxisAlignment.end,
+    //           children: [
+    //             ElevatedButton(
+    //               style: ElevatedButton.styleFrom(
+    //                 backgroundColor: Colors.red,
+    //               ),
+    //               child: const Text('No'),
+    //               onPressed: () {
+    //                 Navigator.of(context).pop();
+    //               },
+    //             ),
+    //             SizedBox(width: 3.w),
+    //             ElevatedButton(
+    //               style: ElevatedButton.styleFrom(
+    //                 backgroundColor: Colors.green,
+    //               ),
+    //               child: const Text('Yes'),
+    //               onPressed: () {
+    //                 Get.back();
+    //                 productController.getProductList();
+    //                 Get.to(() => Productscreen(astroId: widget.customerid!));
+    //               },
+    //             ),
+    //           ],
+    //         ),
+    //       ],
+    //     );
+    //   },
+    // );
   }
 }

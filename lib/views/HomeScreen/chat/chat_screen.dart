@@ -141,12 +141,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _updateOnlineStatus();
       }
 
-      debugPrint(">>> TIMER: INIT BEFORE RESET: newIsStartTimer=${chattimerController.newIsStartTimer}, isTimerStarted=${chattimerController.isTimerStarted}, endTime=${chattimerController.endTime}, isChatTimerStarted=${global.isChatTimerStarted}, chatStartedAt=${global.chatStartedAt}, storageStartedAt=${global.getStorage.read('chatStartedAt')}, storageEndedAt=${global.getStorage.read('chatEndedAt')}, fromrejoin=${widget.fromrejoin}");
+      debugPrint(
+          ">>> TIMER: INIT BEFORE RESET: newIsStartTimer=${chattimerController.newIsStartTimer}, isTimerStarted=${chattimerController.isTimerStarted}, endTime=${chattimerController.endTime}, isChatTimerStarted=${global.isChatTimerStarted}, chatStartedAt=${global.chatStartedAt}, storageStartedAt=${global.getStorage.read('chatStartedAt')}, storageEndedAt=${global.getStorage.read('chatEndedAt')}, fromrejoin=${widget.fromrejoin}");
 
       if (widget.fromrejoin == 1) {
         _initializeCountdownController();
         _hasStartedTimerOnUserJoin = true;
-        debugPrint(">>> TIMER: REJOIN path: newIsStartTimer=${chattimerController.newIsStartTimer}, endTime=${chattimerController.endTime}");
+        debugPrint(
+            ">>> TIMER: REJOIN path: newIsStartTimer=${chattimerController.newIsStartTimer}, endTime=${chattimerController.endTime}");
       } else {
         global.isChatTimerStarted = false;
         chattimerController.newIsStartTimer = false;
@@ -156,7 +158,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         global.getStorage.remove('chatEndedAt');
         _hasStartedTimerOnUserJoin = false;
         chattimerController.update();
-        debugPrint(">>> TIMER: FRESH path: newIsStartTimer=${chattimerController.newIsStartTimer}, endTime=${chattimerController.endTime}");
+        debugPrint(
+            ">>> TIMER: FRESH path: newIsStartTimer=${chattimerController.newIsStartTimer}, endTime=${chattimerController.endTime}");
       }
       chatController.chatLeft = false;
       chatController.customerEndedChatFCM.value = false;
@@ -195,10 +198,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         // Start timer once when customer joins. Skip the very first snapshot
         // (_previousIsInChat == null) because it could be stale from a previous
         // chat session with the same customer (same Firebase path).
-        if (widget.flagId != 2 && isInChat && !_hasStartedTimerOnUserJoin && _previousIsInChat != null) {
+        if (widget.flagId != 2 &&
+            isInChat &&
+            !_hasStartedTimerOnUserJoin &&
+            _previousIsInChat != null) {
           _hasStartedTimerOnUserJoin = true;
           final durationSec = _parseDurationSeconds(widget.chatduration);
-          debugPrint(">>> TIMER: STREAM transition to true, starting timer with duration=$durationSec");
+          debugPrint(
+              ">>> TIMER: STREAM transition to true, starting timer with duration=$durationSec");
           if (durationSec > 0) {
             final now = DateTime.now().millisecondsSinceEpoch;
             global.chatStartedAt = now;
@@ -209,6 +216,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             global.getStorage.write('chatEndedAt', chattimerController.endTime);
             chattimerController.update();
           }
+        } else if (isInChat == false && global.isChatTimerStarted == true) {
+          _userLeftTimer?.cancel();
+          backpress(eddedfrom: "firebase stream");
         }
 
         // Exit is handled by EndChatFromCustomer FCM (via _endChatWorker).
@@ -263,11 +273,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (!mounted) return;
     // Customer ended chat while app was in background (FCM set CUSTOMER_ENDED_CHAT)
     SharedPreferences.getInstance().then((prefs) async {
-      final customerEnded = prefs.getBool(ConstantsKeys.CUSTOMER_ENDED_CHAT) ?? false;
+      final customerEnded =
+          prefs.getBool(ConstantsKeys.CUSTOMER_ENDED_CHAT) ?? false;
       if (customerEnded && mounted && !chatController.chatLeft) {
         await prefs.setBool(ConstantsKeys.CUSTOMER_ENDED_CHAT, false);
         if (!mounted) return;
-        debugPrint('>>> App resumed: customer had ended chat (FCM in background), calling backpress');
+        debugPrint(
+            '>>> App resumed: customer had ended chat (FCM in background), calling backpress');
         backpress(eddedfrom: "app resumed after customer ended FCM");
       }
     });
@@ -432,6 +444,132 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         msg.message == 'Voice message';
   }
 
+  static bool _isRecommendationMessage(ChatMessageModel msg) {
+    if (msg.message == null || msg.message!.isEmpty) return false;
+    final m = msg.message!.trim();
+    return m.contains('PRODUCT_RECOMMENDED') ||
+        m.contains('PUJA_RECOMMENDED');
+  }
+
+  Widget _buildRecommendationCard(ChatMessageModel msg) {
+    final rawMsg = msg.message!.trim();
+    final isProduct = rawMsg.contains('PRODUCT_RECOMMENDED');
+    final tag = isProduct ? 'PRODUCT_RECOMMENDED' : 'PUJA_RECOMMENDED';
+    final tagStart = rawMsg.indexOf(tag);
+    final relevantPart = tagStart >= 0 ? rawMsg.substring(tagStart) : rawMsg;
+    final parts = relevantPart.split('|');
+    final itemName =
+        parts.length > 1 ? parts[1] : (isProduct ? 'Product' : 'Puja');
+    final price = parts.length > 2 ? parts[2] : '';
+    final currency =
+        global.getSystemFlagValue(global.systemFlagNameList.currency);
+    final headerTitle =
+        isProduct ? 'Product Recommended' : 'Puja Recommended';
+    final headerIcon =
+        isProduct ? Icons.shopping_bag_rounded : Icons.auto_awesome;
+
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 4.w, vertical: 1.h),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8E1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFFD54F).withOpacity(0.5)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 1.2.h),
+            decoration: const BoxDecoration(
+              color: Color(0xFFFFB74D),
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(headerIcon, color: Colors.black87, size: 18.sp),
+                SizedBox(width: 2.w),
+                Text(
+                  headerTitle,
+                  style: TextStyle(
+                    fontSize: 15.sp,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 1.5.h),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  itemName,
+                  style: TextStyle(
+                    fontSize: 16.sp,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+                if (price.isNotEmpty) ...[
+                  SizedBox(height: 0.5.h),
+                  Text(
+                    '$currency $price',
+                    style: TextStyle(
+                      fontSize: 15.sp,
+                      fontWeight: FontWeight.w700,
+                      color: Get.theme.primaryColor,
+                    ),
+                  ),
+                ],
+                SizedBox(height: 1.h),
+                Row(
+                  children: [
+                    Icon(Icons.info_outline_rounded,
+                        size: 14.sp, color: Colors.black54),
+                    SizedBox(width: 1.w),
+                    Flexible(
+                      child: Text(
+                        'Recommended by astrologer',
+                        style: TextStyle(
+                          fontSize: 13.sp,
+                          color: Colors.black54,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (msg.createdAt != null) ...[
+                  SizedBox(height: 0.8.h),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      DateFormat().add_jm().format(msg.createdAt!),
+                      style: TextStyle(color: Colors.grey, fontSize: 10.sp),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _toggleVoicePlay(String url) async {
     if (_playingVoiceUrl == url) {
       await _voicePlayer.pause();
@@ -572,7 +710,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   void _updateChatSession() {
-    debugPrint(">>> TIMER: _updateChatSession CALLED - chatLeft=${chatController.chatLeft}, newIsStartTimer=${chattimerController.newIsStartTimer}, endTime=${chattimerController.endTime}");
+    debugPrint(
+        ">>> TIMER: _updateChatSession CALLED - chatLeft=${chatController.chatLeft}, newIsStartTimer=${chattimerController.newIsStartTimer}, endTime=${chattimerController.endTime}");
     print("chatduration:- ${widget.chatduration}");
     final lastSaved = global.getStorage.read('chatStartedAt');
     final chatEndedAt = chattimerController.endTime > 0
@@ -814,7 +953,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                                             TextAlign.center,
                                                       ),
                                                     )
-                                                  : Row(
+                                                  : _isRecommendationMessage(
+                                                          messageList[index])
+                                                      ? _buildRecommendationCard(
+                                                          messageList[index])
+                                                      : Row(
                                                       mainAxisAlignment:
                                                           chatController.isMe
                                                               ? MainAxisAlignment
@@ -1459,6 +1602,46 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                                 ),
                                                 child: InkWell(
                                                   onTap: isUserJoined
+                                                      ? () async {
+                                                          await productController
+                                                              .getProductList();
+                                                          Get.to(() =>
+                                                              Productscreen(
+                                                                astroId: widget
+                                                                    .customerId,
+                                                                userid: widget
+                                                                    .customerId,
+                                                                customerId: widget
+                                                                    .customerId,
+                                                              ));
+                                                        }
+                                                      : null,
+                                                  child: Icon(
+                                                    Icons.card_giftcard_rounded,
+                                                    size: 18.sp,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                  left: 3.0),
+                                              child: Container(
+                                                margin: EdgeInsets.only(
+                                                    bottom: 1.h),
+                                                height: 6.h,
+                                                width: 6.h,
+                                                decoration: BoxDecoration(
+                                                  color: isUserJoined
+                                                      ? Colors.grey.shade700
+                                                      : Colors.grey.shade400,
+                                                  shape: BoxShape.circle,
+                                                  border: Border.all(
+                                                      color: Colors.grey),
+                                                ),
+                                                child: InkWell(
+                                                  onTap: isUserJoined
                                                       ? _startVoiceRecording
                                                       : null,
                                                   child: Padding(
@@ -1774,7 +1957,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     global.chatStartedAt = null;
     global.getStorage.write('chatStartedAt', 0);
     global.getStorage.remove('chatEndedAt');
-    debugPrint(">>> TIMER: BACKPRESS RESET DONE: newIsStartTimer=${chattimerController.newIsStartTimer}, endTime=${chattimerController.endTime}, isTimerStarted=${chattimerController.isTimerStarted}");
+    debugPrint(
+        ">>> TIMER: BACKPRESS RESET DONE: newIsStartTimer=${chattimerController.newIsStartTimer}, endTime=${chattimerController.endTime}, isTimerStarted=${chattimerController.isTimerStarted}");
 
     if (chatController.activeSessions.values.isNotEmpty) {
       final session = chatController.activeSessions.values.first;
@@ -1786,6 +1970,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
     chatController.chatLeft = true;
     chatController.customerEndedChatFCM.value = false;
+    chatController.currentActiveChatFirebaseId = null;
     chatController.update();
     if (widget.flagId == 1) {
       global.inChatscreen(false);
@@ -1821,71 +2006,71 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
       Get.off(() => HomeScreen());
 
-      final dialogCtx = Get.overlayContext;
-      if (dialogCtx == null) return;
-      showDialog<void>(
-        context: dialogCtx,
-        barrierDismissible: false,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            contentPadding: EdgeInsets.zero,
-            content: Container(
-              alignment: Alignment.center,
-              margin: const EdgeInsets.only(bottom: 8),
-              height: 12.h,
-              decoration: const BoxDecoration(
-                color: Colors.amber,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-              ),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(15),
-                child: Container(
-                  alignment: Alignment.center,
-                  child: Image.asset(
-                    'assets/images/interrogation-mark.png',
-                    height: 7.h,
-                  ),
-                ),
-              ),
-            ),
-            actions: [
-              Text(
-                'Do you want to Recommend a Product ?',
-                style: Get.textTheme.bodyMedium?.copyWith(
-                  fontSize: 12.sp,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                    ),
-                    child: const Text('No'),
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                  ),
-                  SizedBox(width: 3.w),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                    ),
-                    child: const Text('Yes'),
-                    onPressed: () {
-                      Get.back();
-                      productController.getProductList();
-                      Get.to(() => Productscreen(astroId: widget.customerId));
-                    },
-                  ),
-                ],
-              ),
-            ],
-          );
-        },
-      );
+      // final dialogCtx = Get.overlayContext;
+      // if (dialogCtx == null) return;
+      // showDialog<void>(
+      //   context: dialogCtx,
+      //   barrierDismissible: false,
+      //   builder: (BuildContext context) {
+      //     return AlertDialog(
+      //       contentPadding: EdgeInsets.zero,
+      //       content: Container(
+      //         alignment: Alignment.center,
+      //         margin: const EdgeInsets.only(bottom: 8),
+      //         height: 12.h,
+      //         decoration: const BoxDecoration(
+      //           color: Colors.amber,
+      //           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      //         ),
+      //         child: SingleChildScrollView(
+      //           padding: const EdgeInsets.all(15),
+      //           child: Container(
+      //             alignment: Alignment.center,
+      //             child: Image.asset(
+      //               'assets/images/interrogation-mark.png',
+      //               height: 7.h,
+      //             ),
+      //           ),
+      //         ),
+      //       ),
+      //       actions: [
+      //         Text(
+      //           'Do you want to Recommend a Product ?',
+      //           style: Get.textTheme.bodyMedium?.copyWith(
+      //             fontSize: 12.sp,
+      //             fontWeight: FontWeight.w500,
+      //           ),
+      //         ),
+      //         Row(
+      //           mainAxisAlignment: MainAxisAlignment.end,
+      //           children: [
+      //             ElevatedButton(
+      //               style: ElevatedButton.styleFrom(
+      //                 backgroundColor: Colors.red,
+      //               ),
+      //               child: const Text('No'),
+      //               onPressed: () {
+      //                 Navigator.of(context).pop();
+      //               },
+      //             ),
+      //             SizedBox(width: 3.w),
+      //             ElevatedButton(
+      //               style: ElevatedButton.styleFrom(
+      //                 backgroundColor: Colors.green,
+      //               ),
+      //               child: const Text('Yes'),
+      //               onPressed: () {
+      //                 Get.back();
+      //                 productController.getProductList();
+      //                 Get.to(() => Productscreen(astroId: widget.customerId));
+      //               },
+      //             ),
+      //           ],
+      //         ),
+      //       ],
+      //     );
+      //   },
+      // );
     }
   }
 }

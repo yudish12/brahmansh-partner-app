@@ -2,6 +2,7 @@
 
 import 'dart:developer';
 import 'dart:io';
+import 'package:brahmanshtalk/controllers/HomeController/chat_controller.dart';
 import 'package:brahmanshtalk/models/productModelScreen.dart';
 import 'package:brahmanshtalk/services/apiHelper.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -76,7 +77,8 @@ class Productcontroller extends GetxController {
     }
   }
 
-  pujaRecommend(String pujaId, String astroId) async {
+  pujaRecommend(String pujaId, String astroId,
+      {String? pujaName, String? pujaPrice, int? customerId}) async {
     try {
       await apiHelper
           .addpujatRecommend(pujaId, global.currentUserId.toString(), astroId)
@@ -87,6 +89,16 @@ class Productcontroller extends GetxController {
           global.showToast(
             message: tr("Puja Recommended Successfully"),
           );
+          if (customerId != null && pujaName != null) {
+            final chatController = Get.find<ChatController>();
+            final price = pujaPrice ?? '';
+            chatController.sendMessage(
+              'PUJA_RECOMMENDED|$pujaName|$price|$pujaId',
+              customerId,
+              false,
+              "pujaRecommend",
+            );
+          }
         } else {
           global.showToast(message: tr("Puja not Recommended"));
         }
@@ -127,7 +139,8 @@ class Productcontroller extends GetxController {
     }
   }
 
-  productRecommend(String productId, String astroId) async {
+  productRecommend(String productId, String astroId,
+      {String? productName, String? productPrice, int? customerId}) async {
     try {
       await apiHelper
           .addProductRecommend(
@@ -139,6 +152,16 @@ class Productcontroller extends GetxController {
             message: tr("Product Recommended Successfully"),
           );
           global.hideLoader();
+          if (customerId != null && productName != null) {
+            final chatController = Get.find<ChatController>();
+            final price = productPrice ?? '';
+            chatController.sendMessage(
+              'PRODUCT_RECOMMENDED|$productName|$price|$productId',
+              customerId,
+              false,
+              "productRecommend",
+            );
+          }
         } else {
           global.showToast(message: tr("Product not Recommended"));
         }

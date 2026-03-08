@@ -26,7 +26,7 @@ import 'package:brahmanshtalk/views/HomeScreen/Profile/profile_screen.dart';
 import 'package:brahmanshtalk/views/HomeScreen/call/agora/MovableRejoinBanner.dart';
 import 'package:brahmanshtalk/views/HomeScreen/history/HistroryScreen.dart';
 import 'package:brahmanshtalk/views/HomeScreen/notification_screen.dart';
-import 'package:brahmanshtalk/views/HomeScreen/products/productScreen.dart';
+// import 'package:brahmanshtalk/views/HomeScreen/products/productScreen.dart';
 import 'package:brahmanshtalk/views/HomeScreen/profileBoost/MainHomeScreen.dart';
 import 'package:brahmanshtalk/views/HomeScreen/profileBoost/profileBoostScreen.dart';
 import 'package:brahmanshtalk/views/HomeScreen/tabs/languageScreen.dart';
@@ -98,68 +98,68 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ? Future.delayed(const Duration(seconds: 3), () {
                 print("isInpopscren ${widget.isId}");
                 global.isCallTimerStarted = false;
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (BuildContext context) {
-                    return AlertDialog(
-                      contentPadding: EdgeInsets.zero,
-                      content: Container(
-                        alignment: Alignment.center,
-                        margin: const EdgeInsets.only(bottom: 8),
-                        height: 12.h,
-                        decoration: const BoxDecoration(
-                          color: Colors.amber,
-                          borderRadius:
-                              BorderRadius.vertical(top: Radius.circular(28)),
-                        ),
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.all(15),
-                          child: Container(
-                              alignment: Alignment.center,
-                              child: Image.asset(
-                                'assets/images/interrogation-mark.png',
-                                height: 7.h,
-                              )),
-                        ),
-                      ),
-                      actions: <Widget>[
-                        Text('Do you want to Recommend a Product ?',
-                            style: Get.textTheme.bodyMedium?.copyWith(
-                                fontSize: 12.sp, fontWeight: FontWeight.w500)),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red),
-                              child: const Text('No'),
-                              onPressed: () {
-                                Navigator.of(context).pop();
-                              },
-                            ),
-                            SizedBox(width: 3.w),
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green),
-                              child: const Text('Yes'),
-                              onPressed: () async {
-                                Get.back();
-                                await productController.getProductList();
-                                productController.update();
-                                WidgetsBinding.instance
-                                    .addPostFrameCallback((_) async {
-                                  Get.to(() =>
-                                      Productscreen(astroId: widget.isId));
-                                });
-                              },
-                            ),
-                          ],
-                        )
-                      ],
-                    );
-                  },
-                );
+                // showDialog(
+                //   context: context,
+                //   barrierDismissible: false,
+                //   builder: (BuildContext context) {
+                //     return AlertDialog(
+                //       contentPadding: EdgeInsets.zero,
+                //       content: Container(
+                //         alignment: Alignment.center,
+                //         margin: const EdgeInsets.only(bottom: 8),
+                //         height: 12.h,
+                //         decoration: const BoxDecoration(
+                //           color: Colors.amber,
+                //           borderRadius:
+                //               BorderRadius.vertical(top: Radius.circular(28)),
+                //         ),
+                //         child: SingleChildScrollView(
+                //           padding: const EdgeInsets.all(15),
+                //           child: Container(
+                //               alignment: Alignment.center,
+                //               child: Image.asset(
+                //                 'assets/images/interrogation-mark.png',
+                //                 height: 7.h,
+                //               )),
+                //         ),
+                //       ),
+                //       actions: <Widget>[
+                //         Text('Do you want to Recommend a Product ?',
+                //             style: Get.textTheme.bodyMedium?.copyWith(
+                //                 fontSize: 12.sp, fontWeight: FontWeight.w500)),
+                //         Row(
+                //           mainAxisAlignment: MainAxisAlignment.end,
+                //           children: [
+                //             ElevatedButton(
+                //               style: ElevatedButton.styleFrom(
+                //                   backgroundColor: Colors.red),
+                //               child: const Text('No'),
+                //               onPressed: () {
+                //                 Navigator.of(context).pop();
+                //               },
+                //             ),
+                //             SizedBox(width: 3.w),
+                //             ElevatedButton(
+                //               style: ElevatedButton.styleFrom(
+                //                   backgroundColor: Colors.green),
+                //               child: const Text('Yes'),
+                //               onPressed: () async {
+                //                 Get.back();
+                //                 await productController.getProductList();
+                //                 productController.update();
+                //                 WidgetsBinding.instance
+                //                     .addPostFrameCallback((_) async {
+                //                   Get.to(() =>
+                //                       Productscreen(astroId: widget.isId));
+                //                 });
+                //               },
+                //             ),
+                //           ],
+                //         )
+                //       ],
+                //     );
+                //   },
+                // );
               })
             : null;
       } else {

@@ -153,7 +153,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
             child: Switch(
               value: switchOn,
               activeColor: Colors.green,
-              onChanged: isBusy ? null : onChanged,
+              onChanged: onChanged,
             ),
           ),
         ),
